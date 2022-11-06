@@ -20,8 +20,7 @@ from tqdm import tqdm
 
 
 def multi_slice_viewer(volume, title, colorbar=True):
-    """Navigate through the time and depth dimensions of a 4D data array using\
-        the arrow keys."""
+    """Move through 2D slices of a 4D data array using the arrow keys."""
     # if data has only 3 dimensions; assume it is missing the depth axis
     # reshape into 4D array with single depth level
     if(len(volume.shape) == 3):
