@@ -313,9 +313,5 @@ else:
                        colorbar=False
                        )
 # to do
-#   assign consistent colors to clusters over time
-#       WIP - will either require kmeans'ing the cluster centroids themselves
-#       or running kmeans over all the data in time, then reshaping
-#   show time step color code in clustering metrics plot
 #   show info about each cluster on hover, based on centroids
 #       look into plotly or just write that information elsewhere
