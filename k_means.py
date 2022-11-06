@@ -1,0 +1,355 @@
+# multi slice viewer adapted from
+# https://www.datacamp.com/tutorial/matplotlib-3d-volumetric-data
+
+# kmeans pipeline based on
+# https://realpython.com/k-means-clustering-python/
+import argparse
+import configparser
+import matplotlib.pyplot as plt
+import netCDF4 as nc
+import numpy as np
+import pandas as pd
+
+from sklearn.cluster import KMeans
+from sklearn.metrics import calinski_harabasz_score,\
+                            davies_bouldin_score,\
+                            silhouette_score
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import MinMaxScaler
+from tqdm import tqdm
+
+
+def multi_slice_viewer(volume, title, colorbar=True):
+    """Navigate through the time and depth dimensions of a 4D data array using\
+        the arrow keys."""
+    # if data has only 3 dimensions; assume it is missing the depth axis
+    # reshape into 4D array with single depth level
+    if(len(volume.shape) == 3):
+        t, y, x = volume.shape
+        volume = np.reshape(volume, (t, 1, y, x))
+
+    # initialise the figure, showing the first time/depth slice
+    # and wait for key presses
+    fig, ax = plt.subplots()
+    ax.volume = volume
+    ax.index = [0, 0]
+    pos = ax.imshow(
+        volume[ax.index[0], ax.index[1]],
+        origin='lower',
+        cmap='rainbow',
+    )
+    if colorbar:
+        fig.colorbar(pos, ax=ax)
+    fig.canvas.mpl_connect('key_press_event', process_key)
+
+    # some formatting
+    plt.suptitle(title)
+    plt.tick_params(
+        axis='both',
+        which='both',
+        labelbottom=False,
+        labelleft=False,)
+
+    # 'change' slice by zero to initialise info text
+    change_slice(ax, 0, 0)
+    change_slice(ax, 1, 0)
+    plt.show()
+
+
+def process_key(event):
+    """Define action to execute when certain keys are pressed."""
+    # get a handle on the axis
+    fig = event.canvas.figure
+    ax = fig.axes[0]
+
+    # arrow key navigation
+    if event.key == 'left':
+        change_slice(ax, 0, -1)
+    elif event.key == 'right':
+        change_slice(ax, 0, 1)
+    if event.key == 'up':
+        change_slice(ax, 1, -1)
+    elif event.key == 'down':
+        change_slice(ax, 1, 1)
+
+    # update the plot
+    fig.canvas.draw()
+
+
+def change_slice(ax, dimension, amount):
+    """Change the index of the current slice by amount for given dimension."""
+    # get a handle on the 4D data array
+    volume = ax.volume
+    # increment index (wrap around with modulo)
+    ax.index[dimension] = (ax.index[dimension] + amount)\
+        % volume.shape[dimension]
+    # set the slice to view based on the new index
+    time_step, depth_step = ax.index
+    max_time_steps, max_depth_steps, _, _ = volume.shape
+    ax.images[0].set_array(volume[time_step, depth_step])
+    ax.title.set_text(f"time: {time_step+1}/{max_time_steps}\n"
+                      f"depth: {depth_step+1}/{max_depth_steps}")
+
+
+# parse commandline arguments
+parser = argparse.ArgumentParser()
+parser.add_argument("--config", "-c", help="file to read configuration from,\
+                     if parameters not supplied interactively")
+args = parser.parse_args()
+
+# parse config file if present
+try:
+    config = configparser.ConfigParser()
+    config.read(args.config)
+except Exception:
+    print('[i] Config file not passed via commandline')
+
+# load data from file, asking user to specify a path if not provided in config
+try:
+    nc_file = config['default']['nc_file']
+except NameError:
+    print('[i] Data file path not provided in config')
+    nc_file = input("[>] Please type the path of the netCDF file to use: ")
+
+# load data
+nc_data = nc.Dataset(nc_file)
+
+# get parameters to run k-means for from file, or interactively
+try:
+    selected_vars = config['default']['selected_vars'].split(",")
+except KeyError:
+
+    # get an alphabetical list of plottable variables
+    plottable_vars = list(nc_data.variables.keys())
+    plottable_vars.sort()
+
+    # list plottable variables for the user to inspect
+    for i, var in enumerate(plottable_vars):
+        # print in a nice format if possible
+        try:
+            long_name = nc_data.variables[var].long_name
+            dims = nc_data.variables[var].dimensions
+            print(f"{i}. {var}\n\t{dims}\n\t{long_name}")
+        except Exception:
+            print(f"{i}. {var}\n{nc_data[var]}")
+
+    # offer to visualise a variable of choice
+    view_var_plots = input(
+        "[>] Would you like to visualise any of these variables? (y/n): ")
+    if view_var_plots.lower() == 'y':
+        try:
+            while True:
+                # get the name of the variable the user wants to plot
+                string_var_to_plot = input(
+                    "[>] Type which variable to plot or Ctrl+C to"
+                    " proceed to choosing k-means parameters: "
+                )
+
+                # get the data as an array
+                var_to_plot = nc_data[string_var_to_plot]
+                data_to_plot = var_to_plot.__array__()
+                # view over time and depth
+                plot_title = string_var_to_plot + " (" + var_to_plot.long_name\
+                    + ") " + var_to_plot.units
+                multi_slice_viewer(data_to_plot, plot_title)
+
+        except KeyboardInterrupt:
+            # the user is done viewing plots, continue to kmeans routine
+            pass
+
+    # finally ask user which vars to use
+    selected_vars = input(
+        "[>] Type the variables to use in kmeans separated by spaces: ")
+    selected_vars = selected_vars.split(" ")
+
+# restrict analysis to ocean surface if some parameters are 2D-only (+time)
+selected_vars_dims = [len(nc_data[var].shape) for var in selected_vars]
+n_spatial_dims = min(selected_vars_dims) - 1
+
+# construct the data processing pipeline including scaling and k-means
+preprocessor = Pipeline(
+    [("scaler", MinMaxScaler())]
+)
+
+clusterer = Pipeline(
+    [
+        (
+            "kmeans",
+            KMeans(
+                init="k-means++",
+                n_init=50,
+                max_iter=500
+            )
+        )
+    ]
+)
+
+pipe = Pipeline(
+    [
+        ("preprocessor", preprocessor),
+        ("clusterer", clusterer)
+    ]
+)
+
+
+# will loop over time slices and run k-means separately for each slice
+# so get the number of time steps
+time_steps = nc_data[selected_vars[0]].shape[0]
+
+# if the number of clusters is not supplied, will evaluate clustering
+# performance over a range of k with different metrics
+# otherwise proceed to k-means
+try:
+    optimal_k = config['default']['optimal_k']
+    labels_over_time = []
+    metrics_mode = False
+except KeyError:
+    try:
+        optimal_k = int(input(
+            "[>] Enter number of clusters now, or leave blank"
+            " to compute clustering metrics for a range of k: "
+             ))
+        labels_over_time = []
+        metrics_mode = False
+    except ValueError:
+        print("[i] Now computing clustering metrics")
+        print("[i] When finished, re-run script with your choice of k")
+        sse_over_time = []
+        silhouettes_over_time = []
+        calinski_harabasz_over_time = []
+        davies_bouldin_over_time = []
+        metrics_mode = True
+        try:
+            max_clusters = int(config['default']['max_clusters'])
+        except KeyError:
+            max_clusters = int(input("Max clusters: "))
+
+# the main loop of this script: iterate over time slices
+for i in (tqdm(range(0, time_steps), desc="time step")):
+    if n_spatial_dims == 2:
+        # flatten the data arrays taking care to slice 4D ones at the surface
+        selected_vars_nonflat = [nc_data[var].__array__()[i, :, :]
+                                 if len(nc_data[var].shape) == 3
+                                 else nc_data[var].__array__()[i, 0, :, :]
+                                 for var in selected_vars]
+    else:
+        # if all data has depth information, use as is, just slice in time
+        selected_vars_nonflat = [nc_data[var].__array__()[i, :, :, :]
+                                 for var in selected_vars]
+
+    # take note of the original array shapes before flattening
+    shape_original = selected_vars_nonflat[0].shape
+    selected_vars_flat = [array.flatten()
+                          for array in selected_vars_nonflat]
+
+    # construct the feature vector with missing data
+    # do not use np.array because it fills values and confuses the scaling
+    features = np.ma.masked_array(selected_vars_flat).T
+
+    # convert to pandas dataframe to drop NaN entries, and back to array
+    df = pd.DataFrame(features)
+    df.columns = selected_vars
+    features = np.array(df.dropna())
+
+    # iterate over different cluster sizes to find optimal k, if not specified
+    if metrics_mode:
+        # initialise empty arrrays for our four tests in search of optimal k
+        sse = []
+        silhouettes = []
+        calinski_harabasz = []
+        davies_bouldin = []
+
+        # run k-means with increasing number of clusters
+        for j in tqdm(range(2, max_clusters), desc='k-means run', leave=False):
+            # set the number of clusters for kmeans
+            pipe['clusterer']['kmeans'].n_clusters = j
+
+            # actually run kmeans
+            pipe.fit(features)
+
+            # handy variables for computing scores
+            scaled_features = pipe['preprocessor'].transform(features)
+            labels = pipe['clusterer']['kmeans'].labels_
+
+            # compute various scores for current k
+            sse.append(pipe['clusterer']['kmeans'].inertia_)
+            silhouettes.append(silhouette_score(scaled_features, labels))
+            calinski_harabasz.append(
+                calinski_harabasz_score(scaled_features, labels))
+            davies_bouldin.append(
+                davies_bouldin_score(scaled_features, labels))
+
+        # append scores for current timestep to respective masterlists
+        sse_over_time.append(sse)
+        silhouettes_over_time.append(silhouettes)
+        calinski_harabasz_over_time.append(calinski_harabasz)
+        davies_bouldin_over_time.append(davies_bouldin)
+
+    else:
+        # metrics mode off
+        # run k-means with chosen k
+        kmeans = pipe['clusterer']['kmeans']
+        kmeans.n_clusters = optimal_k
+        pipe.fit(features)
+        labels = kmeans.labels_
+
+        # create lookup table to get consistent clusters over time
+        # (sort of, it's a temporary solution)
+        idx = np.argsort(kmeans.cluster_centers_.mean(axis=1))
+        lut = np.zeros_like(idx)
+        lut[idx] = np.arange(optimal_k)
+        labels = lut[labels]
+
+        # now to reshape the 1D array of labels into a plottable 2D form
+        # first add the labels as a new column  to our pandas dataframe
+        df.loc[
+            df.index.isin(df.dropna().index),
+            'labels'
+        ] = labels
+
+        # then retrieve the labels column including missing vals as a 1D array
+        labels_flat = np.ma.masked_array(df['labels'])
+
+        # then reshape to the original 2D/3D form and save array to masterlist
+        labels_2d = np.reshape(labels_flat, shape_original)
+        labels_over_time.append(labels_2d)
+
+# finished kmeans loop, time for results
+if metrics_mode:
+    # plot the various scores versus number of clusters
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
+    for sse, sil, ch, db in zip(sse_over_time,
+                                silhouettes_over_time,
+                                calinski_harabasz_over_time,
+                                davies_bouldin_over_time
+                                ):
+
+        ax1.scatter(range(2, max_clusters), sse)
+        ax1.title.set_text('Sum of squared errors, choose elbow point')
+
+        ax2.scatter(range(2, max_clusters), sil)
+        ax2.title.set_text('Silhouette Score, higher is better')
+
+        ax3.scatter(range(2, max_clusters), ch)
+        ax3.title.set_text('Calinski-Harabasz Index, higher is better')
+
+        ax4.scatter(range(2, max_clusters), db)
+        ax4.title.set_text('Davies-Bouldin Index, lower is better')
+
+    plt.show()
+
+else:
+    # map out the clusters each with its own color
+    plot_title =\
+        f"Kmeans result with {optimal_k} clusters based on {selected_vars}"
+    multi_slice_viewer(np.ma.masked_array(labels_over_time),
+                       title=plot_title,
+                       colorbar=False
+                       )
+# to do
+#   assign consistent colors to clusters over time
+#       WIP - will either require kmeans'ing the cluster centroids themselves
+#       or running kmeans over all the data in time, then reshaping
+#   show time step color code in clustering metrics plot
+#   show info about each cluster on hover, based on centroids
+#       look into plotly or just write that information elsewhere
