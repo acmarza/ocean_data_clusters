@@ -192,16 +192,11 @@ pipe = Pipeline(
 )
 
 
-# will loop over time slices and run k-means separately for each slice
-# so get the number of time steps
-time_steps = nc_data[selected_vars[0]].shape[0]
-
 # if the number of clusters is not supplied, will evaluate clustering
 # performance over a range of k with different metrics
 # otherwise proceed to k-means
 try:
     optimal_k = config['default']['optimal_k']
-    labels_over_time = []
     metrics_mode = False
 except KeyError:
     try:
@@ -209,140 +204,111 @@ except KeyError:
             "[>] Enter number of clusters now, or leave blank"
             " to compute clustering metrics for a range of k: "
              ))
-        labels_over_time = []
         metrics_mode = False
     except ValueError:
         print("[i] Now computing clustering metrics")
         print("[i] When finished, re-run script with your choice of k")
-        sse_over_time = []
-        silhouettes_over_time = []
-        calinski_harabasz_over_time = []
-        davies_bouldin_over_time = []
         metrics_mode = True
         try:
             max_clusters = int(config['default']['max_clusters'])
         except KeyError:
-            max_clusters = int(input("Max clusters: "))
+            max_clusters = int(input("[>] Max clusters: "))
 
-# the main loop of this script: iterate over time slices
-for i in (tqdm(range(0, time_steps), desc="time step")):
-    if n_spatial_dims == 2:
-        # flatten the data arrays taking care to slice 4D ones at the surface
-        selected_vars_nonflat = [nc_data[var].__array__()[i, :, :]
-                                 if len(nc_data[var].shape) == 3
-                                 else nc_data[var].__array__()[i, 0, :, :]
-                                 for var in selected_vars]
-    else:
-        # if all data has depth information, use as is, just slice in time
-        selected_vars_nonflat = [nc_data[var].__array__()[i, :, :, :]
-                                 for var in selected_vars]
+if n_spatial_dims == 2:
+    # flatten the data arrays taking care to slice 4D ones at the surface
+    selected_vars_arrays = [nc_data[var].__array__()
+                            if len(nc_data[var].shape) == 3
+                            else nc_data[var].__array__()[:, 0, :, :]
+                            for var in selected_vars]
+else:
+    # if all data has depth information, use as is
+    selected_vars_arrays = [nc_data[var].__array__()
+                            for var in selected_vars]
 
-    # take note of the original array shapes before flattening
-    shape_original = selected_vars_nonflat[0].shape
-    selected_vars_flat = [array.flatten()
-                          for array in selected_vars_nonflat]
+# take note of the original array shapes before flattening
+shape_original = selected_vars_arrays[0].shape
+selected_vars_flat = [array.flatten()
+                      for array in selected_vars_arrays]
 
-    # construct the feature vector with missing data
-    # do not use np.array because it fills values and confuses the scaling
-    features = np.ma.masked_array(selected_vars_flat).T
+# construct the feature vector with missing data
+# do not use np.array because it fills numerical values and confuses scaling
+features = np.ma.masked_array(selected_vars_flat).T
 
-    # convert to pandas dataframe to drop NaN entries, and back to array
-    df = pd.DataFrame(features)
-    df.columns = selected_vars
-    features = np.array(df.dropna())
+# convert to pandas dataframe to drop NaN entries, and back to array
+df = pd.DataFrame(features)
+df.columns = selected_vars
+features = np.array(df.dropna())
 
-    # iterate over different cluster sizes to find optimal k, if not specified
-    if metrics_mode:
-        # initialise empty arrrays for our four tests in search of optimal k
-        sse = []
-        silhouettes = []
-        calinski_harabasz = []
-        davies_bouldin = []
-
-        # run k-means with increasing number of clusters
-        for j in tqdm(range(2, max_clusters), desc='k-means run', leave=False):
-            # set the number of clusters for kmeans
-            pipe['clusterer']['kmeans'].n_clusters = j
-
-            # actually run kmeans
-            pipe.fit(features)
-
-            # handy variables for computing scores
-            scaled_features = pipe['preprocessor'].transform(features)
-            labels = pipe['clusterer']['kmeans'].labels_
-
-            # compute various scores for current k
-            sse.append(pipe['clusterer']['kmeans'].inertia_)
-            silhouettes.append(silhouette_score(scaled_features, labels))
-            calinski_harabasz.append(
-                calinski_harabasz_score(scaled_features, labels))
-            davies_bouldin.append(
-                davies_bouldin_score(scaled_features, labels))
-
-        # append scores for current timestep to respective masterlists
-        sse_over_time.append(sse)
-        silhouettes_over_time.append(silhouettes)
-        calinski_harabasz_over_time.append(calinski_harabasz)
-        davies_bouldin_over_time.append(davies_bouldin)
-
-    else:
-        # metrics mode off
-        # run k-means with chosen k
-        kmeans = pipe['clusterer']['kmeans']
-        kmeans.n_clusters = optimal_k
-        pipe.fit(features)
-        labels = kmeans.labels_
-
-        # create lookup table to get consistent clusters over time
-        # (sort of, it's a temporary solution)
-        idx = np.argsort(kmeans.cluster_centers_.mean(axis=1))
-        lut = np.zeros_like(idx)
-        lut[idx] = np.arange(optimal_k)
-        labels = lut[labels]
-
-        # now to reshape the 1D array of labels into a plottable 2D form
-        # first add the labels as a new column  to our pandas dataframe
-        df.loc[
-            df.index.isin(df.dropna().index),
-            'labels'
-        ] = labels
-
-        # then retrieve the labels column including missing vals as a 1D array
-        labels_flat = np.ma.masked_array(df['labels'])
-
-        # then reshape to the original 2D/3D form and save array to masterlist
-        labels_2d = np.reshape(labels_flat, shape_original)
-        labels_over_time.append(labels_2d)
-
-# finished kmeans loop, time for results
+# iterate over different cluster sizes to find optimal k, if not specified
 if metrics_mode:
+    # initialise empty arrrays for our four tests in search of optimal k
+    sse = []
+    silhouettes = []
+    calinski_harabasz = []
+    davies_bouldin = []
+
+    # run k-means with increasing number of clusters
+    for i in tqdm(range(2, max_clusters), desc='k-means run'):
+        # set the number of clusters for kmeans
+        pipe['clusterer']['kmeans'].n_clusters = i
+
+        # actually run kmeans
+        pipe.fit(features)
+
+        # handy variables for computing scores
+        scaled_features = pipe['preprocessor'].transform(features)
+        labels = pipe['clusterer']['kmeans'].labels_
+
+        # compute various scores for current k
+        sse.append(pipe['clusterer']['kmeans'].inertia_)
+        silhouettes.append(silhouette_score(scaled_features, labels))
+        calinski_harabasz.append(
+            calinski_harabasz_score(scaled_features, labels))
+        davies_bouldin.append(
+            davies_bouldin_score(scaled_features, labels))
+
     # plot the various scores versus number of clusters
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
-    for sse, sil, ch, db in zip(sse_over_time,
-                                silhouettes_over_time,
-                                calinski_harabasz_over_time,
-                                davies_bouldin_over_time
-                                ):
 
-        ax1.scatter(range(2, max_clusters), sse)
-        ax1.title.set_text('Sum of squared errors, choose elbow point')
+    ax1.scatter(range(2, max_clusters), sse)
+    ax1.title.set_text('Sum of squared errors, choose elbow point')
 
-        ax2.scatter(range(2, max_clusters), sil)
-        ax2.title.set_text('Silhouette Score, higher is better')
+    ax2.scatter(range(2, max_clusters), silhouettes)
+    ax2.title.set_text('Silhouette Score, higher is better')
 
-        ax3.scatter(range(2, max_clusters), ch)
-        ax3.title.set_text('Calinski-Harabasz Index, higher is better')
+    ax3.scatter(range(2, max_clusters), calinski_harabasz)
+    ax3.title.set_text('Calinski-Harabasz Index, higher is better')
 
-        ax4.scatter(range(2, max_clusters), db)
-        ax4.title.set_text('Davies-Bouldin Index, lower is better')
+    ax4.scatter(range(2, max_clusters), davies_bouldin)
+    ax4.title.set_text('Davies-Bouldin Index, lower is better')
 
     plt.show()
 
 else:
+    # metrics mode off
+    # run k-means with chosen k
+    kmeans = pipe['clusterer']['kmeans']
+    kmeans.n_clusters = optimal_k
+    pipe.fit(features)
+    labels = kmeans.labels_
+
+    # now to reshape the 1D array of labels into a plottable 2D form
+    # first add the labels as a new column  to our pandas dataframe
+    df.loc[
+        df.index.isin(df.dropna().index),
+        'labels'
+    ] = labels
+
+    # then retrieve the labels column including missing vals as a 1D array
+    labels_flat = np.ma.masked_array(df['labels'])
+
+    # then reshape to the original 3D/fD form
+    labels_shaped = np.reshape(labels_flat, shape_original)
+
     # map out the clusters each with its own color
     plot_title =\
         f"Kmeans result with {optimal_k} clusters based on {selected_vars}"
-    multi_slice_viewer(np.ma.masked_array(labels_over_time),
+    multi_slice_viewer(labels_shaped,
                        title=plot_title,
                        colorbar=False
                        )
