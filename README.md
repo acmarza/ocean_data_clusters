@@ -13,7 +13,7 @@ cd ocean_data_clusters
 ```
 2. Install the required python modules:
 ```bash
-pip install -r requirements.txt
+pip install configparser matplotlib netCDF4 numpy pandas scikit-learn tqdm
 ```
 3. Edit the example configuration file in folder 'configs' as required.
 4. Run the script:
