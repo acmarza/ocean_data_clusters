@@ -110,6 +110,7 @@ try:
 except NameError:
     print('[i] Data file path not provided in config')
     nc_file = input("[>] Please type the path of the netCDF file to use: ")
+print(f"[i] NetCDF file: {nc_file}")
 
 # load data
 nc_data = nc.Dataset(nc_file)
@@ -161,6 +162,7 @@ except KeyError:
     selected_vars = input(
         "[>] Type the variables to use in kmeans separated by spaces: ")
     selected_vars = selected_vars.split(" ")
+print(f"[i] Selected variables for k-means: {selected_vars}")
 
 # restrict analysis to ocean surface if some parameters are 2D-only (+time)
 selected_vars_dims = [len(nc_data[var].shape) for var in selected_vars]
@@ -171,14 +173,25 @@ preprocessor = Pipeline(
     [("scaler", MinMaxScaler())]
 )
 
+try:
+    n_init = int(config['default']['n_init'])
+except NameError:
+    # will not ask but use the kmeans default
+    n_init = 10
+try:
+    max_iter = int(config['default']['max_iter'])
+except NameError:
+    # will not ask but use the kmeans default
+    max_iter = 300
+print(f"[i] K-means hyperparamters: n_init = {n_init}, max_iter = {max_iter}")
 clusterer = Pipeline(
     [
         (
             "kmeans",
             KMeans(
                 init="k-means++",
-                n_init=50,
-                max_iter=500
+                n_init=n_init,
+                max_iter=max_iter
             )
         )
     ]
