@@ -234,7 +234,7 @@ try:
 except NameError:
     # will not ask but use the kmeans default
     max_iter = 300
-print(f"[i] K-means hyperparamters: n_init = {n_init}, max_iter = {max_iter}")
+print(f"[i] K-means hyperparameters: n_init = {n_init}, max_iter = {max_iter}")
 clusterer = Pipeline(
     [
         (
