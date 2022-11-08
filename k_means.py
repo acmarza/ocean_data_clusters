@@ -19,40 +19,81 @@ from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
 
 
-def multi_slice_viewer(volume, title, colorbar=True):
-    """Move through 2D slices of a 4D data array using the arrow keys."""
+def multi_slice_viewer(volume, title, colorbar=True, view="z"):
+    """Move through 2D slices of a 4D data array using the arrow keys.
+    Assumes array is given with shape (time, z, y, x)"""
+
     # if data has only 3 dimensions; assume it is missing the depth axis
     # reshape into 4D array with single depth level
-    if(len(volume.shape) == 3):
+    if len(volume.shape) == 3:
         t, y, x = volume.shape
         volume = np.reshape(volume, (t, 1, y, x))
 
-    # initialise the figure, showing the first time/depth slice
+    # initialise the figure and handy vars, showing the first time/depth slice
     # and wait for key presses
     fig, ax = plt.subplots()
     ax.volume = volume
     ax.index = [0, 0]
-    pos = ax.imshow(
+    ax.pos = ax.imshow(
         volume[ax.index[0], ax.index[1]],
-        origin='lower',
         cmap='rainbow',
     )
+
+    # default is to draw colorbar
     if colorbar:
-        fig.colorbar(pos, ax=ax)
+        fig.colorbar(ax.pos, ax=ax)
+
+    # initialise view perpendicular to z
+    change_view(ax, 'z')
+
+    # tell figure to wait for key events
     fig.canvas.mpl_connect('key_press_event', process_key)
 
-    # some formatting
+    # title specified in function call
     plt.suptitle(title)
-    plt.tick_params(
-        axis='both',
-        which='both',
-        labelbottom=False,
-        labelleft=False,)
 
-    # 'change' slice by zero to initialise info text
-    change_slice(ax, 0, 0)
-    change_slice(ax, 1, 0)
+    # finally show the figure
     plt.show()
+
+
+def change_view(ax, view):
+
+    # if view not specified, default to z
+    try:
+        ax.view
+    except AttributeError:
+        ax.view = 'z'
+
+    # define permutations between axes
+    z_order = [0, 1, 2, 3]
+    x_order = [0, 2, 3, 1]
+    y_order = [0, 2, 1, 3]
+    permutation_dict = {
+        'x': x_order,
+        'y': y_order,
+        'z': z_order
+    }
+
+    # move the axes to slice through the fist two (time and a space axis)
+    ax.volume = np.moveaxis(
+        ax.volume,
+        permutation_dict[ax.view],
+        permutation_dict[view]
+    )
+
+    # make sure plot doesn't show upside down
+    origin_dict = {
+        'x': 'upper',
+        'y': 'upper',
+        'z': 'lower'
+    }
+    ax.pos.origin = origin_dict[view]
+
+    # assign the new view to the figure to be used when updating info text
+    ax.view = view
+
+    # reset space slice to zero
+    change_slice(ax, 1, -ax.index[1])
 
 
 def process_key(event):
@@ -64,15 +105,27 @@ def process_key(event):
     # arrow key navigation
     if event.key == 'left':
         change_slice(ax, 0, -1)
-    elif event.key == 'right':
+    if event.key == 'right':
         change_slice(ax, 0, 1)
     if event.key == 'up':
         change_slice(ax, 1, -1)
-    elif event.key == 'down':
+    if event.key == 'down':
         change_slice(ax, 1, 1)
-
+    if event.key == 'x':
+        change_view(ax, 'x')
+    if event.key == 'y':
+        change_view(ax, 'y')
+    if event.key == 'z':
+        change_view(ax, 'z')
     # update the plot
     fig.canvas.draw()
+
+
+def update_suptitle_text(ax):
+    time_step, depth_step = ax.index
+    max_time_steps, max_depth_steps, _, _ = ax.volume.shape
+    ax.title.set_text(f"time: {time_step+1}/{max_time_steps}\n"
+                      f"{ax.view}: {depth_step+1}/{max_depth_steps}")
 
 
 def change_slice(ax, dimension, amount):
@@ -83,11 +136,8 @@ def change_slice(ax, dimension, amount):
     ax.index[dimension] = (ax.index[dimension] + amount)\
         % volume.shape[dimension]
     # set the slice to view based on the new index
-    time_step, depth_step = ax.index
-    max_time_steps, max_depth_steps, _, _ = volume.shape
-    ax.images[0].set_array(volume[time_step, depth_step])
-    ax.title.set_text(f"time: {time_step+1}/{max_time_steps}\n"
-                      f"depth: {depth_step+1}/{max_depth_steps}")
+    ax.images[0].set_array(volume[ax.index[0], ax.index[1]])
+    update_suptitle_text(ax)
 
 
 # parse commandline arguments
@@ -144,14 +194,16 @@ except KeyError:
                     " proceed to choosing k-means parameters: "
                 )
 
-                # get the data as an array
-                var_to_plot = nc_data[string_var_to_plot]
-                data_to_plot = var_to_plot.__array__()
-                # view over time and depth
-                plot_title = string_var_to_plot + " (" + var_to_plot.long_name\
-                    + ") " + var_to_plot.units
-                multi_slice_viewer(data_to_plot, plot_title)
-
+                try:
+                    # get the data as an array
+                    var_to_plot = nc_data[string_var_to_plot]
+                    data_to_plot = var_to_plot.__array__()
+                    # view over time and depth
+                    plot_title = string_var_to_plot + " ("\
+                        + var_to_plot.long_name + ") " + var_to_plot.units
+                    multi_slice_viewer(data_to_plot, plot_title, view='x')
+                except IndexError:
+                    print("[!] {string_var_to_plot} not found; check spelling")
         except KeyboardInterrupt:
             # the user is done viewing plots, continue to kmeans routine
             pass
