@@ -396,4 +396,4 @@ else:
     MultiSliceViewer(labels_shaped, title=plot_title, colorbar=False)
 # to do
 #   show info about each cluster on hover, based on centroids
-#       look into plotly or just write that information elsewhere
+#   rewrite comments for multi slice viewer
