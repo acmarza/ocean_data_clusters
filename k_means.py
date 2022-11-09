@@ -353,6 +353,7 @@ else:
     # run k-means with chosen k
     kmeans = pipe['clusterer']['kmeans']
     kmeans.n_clusters = optimal_k
+    print("[i] Running k-means, please stand by...")
     pipe.fit(features)
     labels = kmeans.labels_
 
