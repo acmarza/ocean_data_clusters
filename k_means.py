@@ -260,7 +260,7 @@ pipe = Pipeline(
 # performance over a range of k with different metrics
 # otherwise proceed to k-means
 try:
-    optimal_k = config['default']['optimal_k']
+    optimal_k = int(config['default']['optimal_k'])
     metrics_mode = False
 except KeyError:
     try:
