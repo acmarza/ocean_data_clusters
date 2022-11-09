@@ -5,18 +5,22 @@ A python script that reads in a NetCDF data file defined in three or four dimens
 
 ## Installation
 
-1. Clone the repository:
+Clone the repository or otherwise download the k_means.py script and an example config to get started:
 ```bash
 git clone --depth=1 https://gitlab.com/earth15/ocean_data_clusters.git
-cd ocean_data_clusters
 
 ```
-2. Install the required python modules:
+Install the required python modules:
 ```bash
 pip install configparser matplotlib netCDF4 numpy pandas scikit-learn tqdm
 ```
-3. Edit the example configuration file in folder 'configs' as required.
-4. Run the script:
+## Usage
+1. Edit the example configuration file in folder 'configs' as needed.
+2. Run the script:
 ```bash
 python k_means.py -c configs/example.conf
 ```
+3. Interacting with the plots: 
+- left-right arrows to move backward/forward in time
+- up-down arrows to navigate the current spatial dimension that the viewer is slicing across
+- press x, y, z to change the main view; a line on the plot below will appear to help you locate the current slice on a map
