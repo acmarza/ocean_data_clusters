@@ -5,6 +5,8 @@
 # https://realpython.com/k-means-clustering-python/
 import argparse
 import configparser
+import matplotlib.cm as cm
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import netCDF4 as nc
 import numpy as np
@@ -21,7 +23,8 @@ from tqdm import tqdm
 
 class MultiSliceViewer:
 
-    def __init__(self, volume, title, colorbar=True):
+    def __init__(self, volume, title, colorbar=True, legend=False,
+                 cmap='rainbow'):
         # if data has only 3 dimensions; assume it is missing the depth axis
         # reshape into 4D array with single depth level
         if len(volume.shape) == 3:
@@ -30,7 +33,7 @@ class MultiSliceViewer:
 
         # init class attributes
         self.volume = volume
-        self.fig, (self.main_ax, self.helper_ax) = plt.subplots(2)
+        self.fig, (self.main_ax, self.helper_ax) = plt.subplots(1, 2)
         self.index = [0, 0]
 
         self.main_axes_image = self.main_ax.imshow(
@@ -38,7 +41,7 @@ class MultiSliceViewer:
                 self.index[0],
                 self.index[1]
             ],
-            cmap='rainbow',
+            cmap=cmap,
         )
 
         self.helper_ax.imshow(
@@ -47,7 +50,7 @@ class MultiSliceViewer:
                 self.index[1]
             ],
             origin='lower',
-            cmap='rainbow',
+            cmap=cmap,
         )
 
         # put a colorbar next to main plot if requested
@@ -63,6 +66,19 @@ class MultiSliceViewer:
 
         # title specified in function call
         plt.suptitle(title)
+
+        if legend:
+            values = np.unique(volume.ravel())
+            im = self.main_axes_image
+            colors = [im.cmap(im.norm(value)) for value in values]
+            # create a patch (proxy artist) for every color
+            patches = [mpatches.Patch(color=colors[i],
+                                      label="{l}".format(l=values[i]))
+                       for i in range(len(values))]
+            # put those patched as legend-handles into the legend
+            self.main_ax.legend(handles=patches,
+                                bbox_to_anchor=(-0.25, 0.5),
+                                loc="center left")
 
         # finally show the figure
         plt.show()
@@ -376,6 +392,24 @@ else:
     print("[i] Running k-means, please stand by...")
     pipe.fit(features)
     labels = kmeans.labels_
+    labels += 1
+    # to get consistent colors for the next plots
+    palette = 'tab10'
+    cmap = cm.get_cmap(palette)
+    labels_colors = cmap(np.linspace(0, 1, num=optimal_k))
+
+    # rescale the centroids back to original data ranges
+    centroids = kmeans.cluster_centers_
+    centroids = pipe['preprocessor'].inverse_transform(centroids)
+
+    # scatter plot of the centroids for each selected variable
+    n_params = len(selected_vars)
+    centroids_fig, centroids_axes = plt.subplots(1, n_params)
+    for i, ax in enumerate(centroids_axes):
+        ax.set_xticks([1], [selected_vars[i]])
+        for j in range(0, centroids.shape[0]):
+            ax.scatter(1, centroids[j, i], color=labels_colors[j])
+    centroids_fig.show()
 
     # now to reshape the 1D array of labels into a plottable 2D form
     # first add the labels as a new column  to our pandas dataframe
@@ -393,7 +427,9 @@ else:
     # map out the clusters each with its own color
     plot_title =\
         f"Kmeans result with {optimal_k} clusters based on {selected_vars}"
-    MultiSliceViewer(labels_shaped, title=plot_title, colorbar=False)
+    MultiSliceViewer(labels_shaped, title=plot_title, colorbar=False,
+                     legend=True, cmap=palette)
+
 # to do
 #   show info about each cluster on hover, based on centroids
 #   rewrite comments for multi slice viewer
