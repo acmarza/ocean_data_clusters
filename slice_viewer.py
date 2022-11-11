@@ -1,4 +1,5 @@
-import matplotlib.patches as mpatches
+import matplotlib.animation as animation
+import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -6,7 +7,7 @@ import numpy as np
 class MultiSliceViewer:
 
     def __init__(self, volume, title, colorbar=True, legend=False,
-                 cmap='rainbow'):
+                 cmap='rainbow', video_file='animation.mp4'):
         # if data has only 3 dimensions; assume it is missing the depth axis
         # reshape into 4D array with single depth level
         if len(volume.shape) == 3:
@@ -52,13 +53,15 @@ class MultiSliceViewer:
             im = self.main_axes_image
             colors = [im.cmap(im.norm(value)) for value in values]
             # create a patch (proxy artist) for every color
-            patches = [mpatches.Patch(color=colors[i],
-                                      label="{l}".format(l=values[i]))
+            patches = [patches.Patch(color=colors[i],
+                                     label="{l}".format(l=values[i]))
                        for i in range(len(values))]
             # put those patched as legend-handles into the legend
             self.main_ax.legend(handles=patches,
                                 bbox_to_anchor=(-0.25, 0.5),
                                 loc="center left")
+        # for animations
+        self.video_file = video_file
 
         # finally show the figure
         plt.show()
@@ -97,7 +100,7 @@ class MultiSliceViewer:
         self.view = view
 
         # reset space slice to zero
-        self.change_slice(1, -self.index[1])
+        self.reset_slice(1)
 
     def process_key(self, event):
         """Define action to execute when certain keys are pressed."""
@@ -116,6 +119,8 @@ class MultiSliceViewer:
             self.set_view('y')
         if event.key == 'z':
             self.set_view('z')
+        if event.key == 'a':
+            self.animate_wrapper()
         # update the plot
         self.fig.canvas.draw()
 
@@ -162,3 +167,21 @@ class MultiSliceViewer:
                 helper_line_y,
                 color='black'
             )
+
+    def reset_slice(self, dimension):
+        self.change_slice(dimension, -self.index[dimension])
+
+    def animate(self, frame):
+        self.change_slice(0, 1)
+
+    def animate_wrapper(self):
+
+        # reset time to zero
+        self.reset_slice(0)
+        # initialise animation with number of frames = number of time slices
+        n_frames = self.volume.shape[0]
+        anim = animation.FuncAnimation(self.fig, self.animate,
+                                       frames=n_frames)
+        writervideo = animation.FFMpegWriter(fps=5)
+        anim.save(self.video_file, writer=writervideo)
+        print(f'[i] Saved animation as {self.video_file}')
