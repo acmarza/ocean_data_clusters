@@ -273,5 +273,7 @@ else:
                      legend=True, cmap=palette)
 
 # to do
-#   show info about each cluster on hover, based on centroids
 #   rewrite comments for multi slice viewer
+#   possibly replace netcdf4 with nctoolkit and xarray
+#   add lon/lat to viewer
+#   add scatterplot when n_params <= 3
