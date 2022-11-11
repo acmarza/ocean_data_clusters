@@ -5,7 +5,7 @@ A python script that reads in a NetCDF data file defined in three or four dimens
 
 ## Installation
 
-Clone the repository or otherwise download the k_means.py script and an example config to get started:
+Clone the repository or otherwise download the k_means.py and slice_viewer.py scripts and an example config to get started:
 ```bash
 git clone --depth=1 https://gitlab.com/earth15/ocean_data_clusters.git
 
