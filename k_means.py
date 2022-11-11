@@ -429,7 +429,6 @@ else:
         f"Kmeans result with {optimal_k} clusters based on {selected_vars}"
     MultiSliceViewer(labels_shaped, title=plot_title, colorbar=False,
                      legend=True, cmap=palette)
-    input()
 
 # to do
 #   show info about each cluster on hover, based on centroids
