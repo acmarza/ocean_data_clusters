@@ -33,7 +33,7 @@ class MultiSliceViewer:
 
         # init class attributes
         self.volume = volume
-        self.fig, (self.main_ax, self.helper_ax) = plt.subplots(2)
+        self.fig, (self.main_ax, self.helper_ax) = plt.subplots(1, 2)
         self.index = [0, 0]
 
         self.main_axes_image = self.main_ax.imshow(
@@ -77,8 +77,8 @@ class MultiSliceViewer:
                        for i in range(len(values))]
             # put those patched as legend-handles into the legend
             self.main_ax.legend(handles=patches,
-                                bbox_to_anchor=(1, 1),
-                                loc="upper left")
+                                bbox_to_anchor=(-0.25, 0.5),
+                                loc="center left")
 
         # finally show the figure
         plt.show()
