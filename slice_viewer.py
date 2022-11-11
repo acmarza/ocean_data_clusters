@@ -15,6 +15,7 @@ class MultiSliceViewer:
 
         # init class attributes
         self.volume = volume
+        self.surface_slices = volume[:, 0]
         self.fig, (self.main_ax, self.helper_ax) = plt.subplots(1, 2)
         self.index = [0, 0]
 
@@ -27,10 +28,7 @@ class MultiSliceViewer:
         )
 
         self.helper_ax.imshow(
-            volume[
-                self.index[0],
-                self.index[1]
-            ],
+            self.surface_slices[self.index[0]],
             origin='lower',
             cmap=cmap,
         )
@@ -146,6 +144,9 @@ class MultiSliceViewer:
                 self.index[1]
             ]
         )
+
+        # also update the surface view if time changed
+        self.helper_ax.images[0].set_array(self.surface_slices[self.index[0]])
 
         self.update_suptitle_text()
 
