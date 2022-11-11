@@ -65,7 +65,7 @@ class MultiSliceViewer:
         plt.suptitle(title)
 
         # finally show the figure
-        plt.show()
+        self.fig.show()
 
     def set_view(self, view):
 
@@ -376,7 +376,19 @@ else:
     print("[i] Running k-means, please stand by...")
     pipe.fit(features)
     labels = kmeans.labels_
+    centroids = kmeans.cluster_centers_
+    centroids = pipe['preprocessor'].inverse_transform(centroids)
+    print(centroids)
+    print(centroids.shape)
 
+    n_params = len(selected_vars)
+    centroids_fig, centroids_axes = plt.subplots(1, n_params)
+
+    for i, ax in enumerate(centroids_axes):
+        ax.set_xticks([1], [selected_vars[i]])
+        for j in range(0, centroids.shape[0]):
+            ax.scatter(1, centroids[j, i])
+    centroids_fig.show()
     # now to reshape the 1D array of labels into a plottable 2D form
     # first add the labels as a new column  to our pandas dataframe
     df.loc[
@@ -394,6 +406,8 @@ else:
     plot_title =\
         f"Kmeans result with {optimal_k} clusters based on {selected_vars}"
     MultiSliceViewer(labels_shaped, title=plot_title, colorbar=False)
+    input()
+
 # to do
 #   show info about each cluster on hover, based on centroids
 #   rewrite comments for multi slice viewer
