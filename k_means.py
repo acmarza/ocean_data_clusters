@@ -80,7 +80,7 @@ except KeyError:
                 # view over time and depth
                 plot_title = string_var_to_plot + " ("\
                     + var_to_plot.long_name + ") " + var_to_plot.units
-                MultiSliceViewer(data_to_plot, plot_title)
+                MultiSliceViewer(data_to_plot, plot_title).show()
             except IndexError:
                 print("[!] {string_var_to_plot} not found; check spelling")
     except KeyboardInterrupt:
@@ -270,8 +270,7 @@ else:
     plot_title =\
         f"Kmeans result with {optimal_k} clusters based on {selected_vars}"
     MultiSliceViewer(labels_shaped, title=plot_title, colorbar=False,
-                     legend=True, cmap=palette)
-
+                     legend=True, cmap=palette).show()
 # to do
 #   rewrite comments for multi slice viewer
 #   possibly replace netcdf4 with nctoolkit and xarray

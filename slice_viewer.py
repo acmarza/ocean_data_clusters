@@ -41,8 +41,8 @@ class MultiSliceViewer:
         self.set_view('z')
 
         # tell figure to wait for key events
-        self.callback_id = self.fig.canvas.mpl_connect('key_press_event',
-                                                       self.process_key)
+        self.keypress_cid = self.fig.canvas.mpl_connect('key_press_event',
+                                                        self.process_key)
 
         # title specified in function call
         plt.suptitle(title)
@@ -60,7 +60,7 @@ class MultiSliceViewer:
                                 bbox_to_anchor=(-0.25, 0.5),
                                 loc="center left")
 
-        # finally show the figure
+    def show(self):
         plt.show()
 
     def set_view(self, view):
@@ -162,3 +162,24 @@ class MultiSliceViewer:
                 helper_line_y,
                 color='black'
             )
+
+
+class CorrelationViewer(MultiSliceViewer):
+
+    def __init__(self, volume, corr_mat, title, colorbar=True, legend=False,
+                 cmap='rainbow'):
+
+        super().__init__(volume, title, colorbar=colorbar, legend=legend,
+                         cmap=cmap)
+
+        self.click_cid = self.fig.canvas.mpl_connect('button_press_event',
+                                                     self.process_click)
+        self.corr_mat = corr_mat
+
+    def process_click(self, event):
+        if not event.inaxes:
+            return
+
+        x_pos = int(event.xdata)
+        y_pos = int(event.ydata)
+        print(f'data coords {x_pos}:{y_pos}')
