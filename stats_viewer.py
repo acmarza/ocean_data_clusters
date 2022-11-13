@@ -1,7 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+from scipy.stats.mstats import pearsonr
 from slice_viewer import MultiSliceViewer
+from tqdm import tqdm
 
 
 class CorrelationViewer(MultiSliceViewer):
@@ -20,11 +22,19 @@ class CorrelationViewer(MultiSliceViewer):
 
         evolutions = np.reshape(self.surface_slice, [t, x*y]).T
 
-        self.corr_mat = np.corrcoef(evolutions)
+        # self.corr_mat = np.corrcoef(evolutions)
+        corr_mat = np.empty([y*x, y*x])
+        pval_mat = np.empty([y*x, y*x])
 
-        self.time_steps, self.n_cols, self.n_rows = self.surface_slice.shape
+        evolutions = np.ma.masked_invalid(evolutions)
+        for i, evo1 in enumerate(tqdm(evolutions)):
+            for j, evo2 in enumerate(tqdm(evolutions, leave=False)):
+                corr_coef, pval = pearsonr(evo1, evo2)
+                corr_mat[i, j] = corr_coef
+                pval_mat[i, j] = corr_coef
 
-        self.corr_loc = [self.n_rows/2, self.n_cols/2]
+        self.corr_loc = [x/2, y/2]
+        self.time_steps, self.n_cols, self.n_rows = t, y, x
 
         super().__init__(volume, title, colorbar=colorbar, legend=legend,
                          cmap=cmap)
