@@ -152,12 +152,13 @@ class MultiSliceViewer:
 
         self.update_suptitle_text()
 
-        self.update_helper_plot()
+        self.update_slice_locator()
 
-    def update_helper_plot(self):
+    def update_slice_locator(self):
         try:
-            self.helper_ax.lines.pop(0)
-        except IndexError:
+            for handle in self.helper_line:
+                handle.remove()
+        except AttributeError:
             pass
 
         if(self.view != 'z'):
