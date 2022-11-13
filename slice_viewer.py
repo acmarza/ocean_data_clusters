@@ -201,7 +201,7 @@ class CorrelationViewer(MultiSliceViewer):
         self.corr_ax_image = self.corr_ax.imshow(
             dummy_corr_map,
             origin='lower',
-            cmap='coolwarm'
+            cmap='cividis'
         )
         self.fig.colorbar(self.corr_ax_image, ax=self.corr_ax)
 
