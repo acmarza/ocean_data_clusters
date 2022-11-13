@@ -134,10 +134,6 @@ class MultiSliceViewer:
                                     )
 
     def change_slice(self, dimension, amount):
-        try:
-            self.helper_ax.lines.pop(0)
-        except IndexError:
-            pass
         # increment index (wrap around with modulo)
         self.index[dimension] += amount
         self.index[dimension] %= self.volume.shape[dimension]
@@ -155,6 +151,14 @@ class MultiSliceViewer:
         self.helper_ax_image.set_data(self.surface_slices[self.index[0]])
 
         self.update_suptitle_text()
+
+        self.update_helper_plot()
+
+    def update_helper_plot(self):
+        try:
+            self.helper_ax.lines.pop(0)
+        except IndexError:
+            pass
 
         if(self.view != 'z'):
             helper_line_x = [self.index[1], self.index[1]]
@@ -175,16 +179,18 @@ class CorrelationViewer(MultiSliceViewer):
     def __init__(self, volume, corr_mat, title, colorbar=True, legend=False,
                  cmap='rainbow'):
 
-        super().__init__(volume, title, colorbar=colorbar, legend=legend,
-                         cmap=cmap)
 
         self.corr_mat = corr_mat
 
         self.time_steps, self.n_cols, self.n_rows = volume.shape
 
+        self.corr_loc = [self.n_rows/2, self.n_cols/2]
+
+        super().__init__(volume, title, colorbar=colorbar, legend=legend,
+                         cmap=cmap)
+
         self.click_cid = self.fig.canvas.mpl_connect('button_press_event',
                                                      self.process_click)
-
         dummy_corr_map = np.reshape(np.linspace(
                 start=np.nanmin(corr_mat),
                 stop=np.nanmax(corr_mat),
@@ -192,13 +198,12 @@ class CorrelationViewer(MultiSliceViewer):
                 endpoint=True
             ), [self.n_rows, self.n_cols])
 
-        print(f"[debug] dummy cor map shape {dummy_corr_map.shape}")
         self.corr_ax_image = self.corr_ax.imshow(
             dummy_corr_map,
             origin='lower',
             cmap='coolwarm'
         )
-        # self.fig.colorbar(self.corr_ax_image, self.corr_ax)
+        self.fig.colorbar(self.corr_ax_image, ax=self.corr_ax)
 
     def init_plots(self):
         # separate this call to plt.subplots for easy override in children
@@ -211,6 +216,7 @@ class CorrelationViewer(MultiSliceViewer):
 
         x_pos = int(event.xdata)
         y_pos = int(event.ydata)
+        self.corr_loc = [x_pos, y_pos]
         # print(f'data coords {x_pos}:{y_pos}')
         self.evo_ax.clear()
         self.evo_ax.plot(range(self.volume.shape[0]),
@@ -222,13 +228,19 @@ class CorrelationViewer(MultiSliceViewer):
         corr_map = np.reshape(corr_array,
                               [self.n_rows, self.n_cols]
                               )
-        # self.main_ax_image.set_data(corr_map)
-        # print(f"[debug] corr_min={np.nanmin(corr_map)}")
-        # print(f"[debug] corr_max={np.nanmax(corr_map)}")
-        # self.main_ax_image.set_cmap('coolwarm')
-        # self.colorbar.update_normal(self.main_ax_image)
-        # cbar_ticks = np.linspace(-1, 1, num=10, endpoint=True)
-        # self.colorbar.set_ticks(cbar_ticks)
-        # print(dir(type(self.main_ax_image)))
         self.corr_ax_image.set_data(corr_map)
+        self.update_helper_plot()
         self.fig.canvas.draw()
+
+    def update_helper_plot(self):
+        try:
+            self.helper_ax.lines.pop(0)
+        except IndexError:
+            pass
+        x_pos, y_pos = self.corr_loc
+        self.helper_point = self.helper_ax.plot(
+            x_pos,
+            y_pos,
+            color='black',
+            marker='*'
+        )
