@@ -16,10 +16,11 @@ class MultiSliceViewer:
         # init class attributes
         self.volume = volume
         self.surface_slices = volume[:, 0]
-        self.fig, (self.main_ax, self.helper_ax) = plt.subplots(1, 2)
         self.index = [0, 0]
 
-        self.main_axes_image = self.main_ax.imshow(
+        self.init_plots()
+
+        self.main_ax_image = self.main_ax.imshow(
             volume[
                 self.index[0],
                 self.index[1]
@@ -27,7 +28,7 @@ class MultiSliceViewer:
             cmap=cmap,
         )
 
-        self.helper_ax.imshow(
+        self.helper_ax_image = self.helper_ax.imshow(
             self.surface_slices[self.index[0]],
             origin='lower',
             cmap=cmap,
@@ -35,7 +36,7 @@ class MultiSliceViewer:
 
         # put a colorbar next to main plot if requested
         if colorbar:
-            self.fig.colorbar(self.main_axes_image, ax=self.main_ax)
+            self.fig.colorbar(self.main_ax_image, ax=self.main_ax)
 
         # initialise view perpendicular to z
         self.set_view('z')
@@ -49,7 +50,7 @@ class MultiSliceViewer:
 
         if legend:
             values = np.unique(volume.ravel())
-            im = self.main_axes_image
+            im = self.main_ax_image
             colors = [im.cmap(im.norm(value)) for value in values]
             # create a patch (proxy artist) for every color
             patches = [mpatches.Patch(color=colors[i],
@@ -59,6 +60,10 @@ class MultiSliceViewer:
             self.main_ax.legend(handles=patches,
                                 bbox_to_anchor=(-0.25, 0.5),
                                 loc="center left")
+
+    def init_plots(self):
+        # separate this call to plt.subplots for easy override in children
+        self.fig, (self.main_ax, self.helper_ax) = plt.subplots(1, 2)
 
     def show(self):
         plt.show()
@@ -91,7 +96,7 @@ class MultiSliceViewer:
             'y': 'upper',
             'z': 'lower'
         }
-        self.main_axes_image.origin = origin_dict[view]
+        self.main_ax_image.origin = origin_dict[view]
 
         # assign the new view to the figure to be used when updating info text
         self.view = view
@@ -138,7 +143,8 @@ class MultiSliceViewer:
         self.index[dimension] %= self.volume.shape[dimension]
 
         # set the slice to view based on the new index
-        self.main_ax.images[0].set_array(
+        # self.main_ax.images[0].set_array(
+        self.main_ax_image.set_data(
             self.volume[
                 self.index[0],
                 self.index[1]
@@ -146,7 +152,7 @@ class MultiSliceViewer:
         )
 
         # also update the surface view if time changed
-        self.helper_ax.images[0].set_array(self.surface_slices[self.index[0]])
+        self.helper_ax_image.set_data(self.surface_slices[self.index[0]])
 
         self.update_suptitle_text()
 
@@ -172,9 +178,32 @@ class CorrelationViewer(MultiSliceViewer):
         super().__init__(volume, title, colorbar=colorbar, legend=legend,
                          cmap=cmap)
 
+        self.corr_mat = corr_mat
+
+        self.time_steps, self.n_cols, self.n_rows = volume.shape
+
         self.click_cid = self.fig.canvas.mpl_connect('button_press_event',
                                                      self.process_click)
-        self.corr_mat = corr_mat
+
+        dummy_corr_map = np.reshape(np.linspace(
+                start=np.nanmin(corr_mat),
+                stop=np.nanmax(corr_mat),
+                num=self.n_rows*self.n_cols,
+                endpoint=True
+            ), [self.n_rows, self.n_cols])
+
+        print(f"[debug] dummy cor map shape {dummy_corr_map.shape}")
+        self.corr_ax_image = self.corr_ax.imshow(
+            dummy_corr_map,
+            origin='lower',
+            cmap='coolwarm'
+        )
+        # self.fig.colorbar(self.corr_ax_image, self.corr_ax)
+
+    def init_plots(self):
+        # separate this call to plt.subplots for easy override in children
+        self.fig, ((self.main_ax, self.helper_ax),
+                   (self.evo_ax, self.corr_ax)) = plt.subplots(2, 2)
 
     def process_click(self, event):
         if not event.inaxes:
@@ -182,4 +211,24 @@ class CorrelationViewer(MultiSliceViewer):
 
         x_pos = int(event.xdata)
         y_pos = int(event.ydata)
-        print(f'data coords {x_pos}:{y_pos}')
+        # print(f'data coords {x_pos}:{y_pos}')
+        self.evo_ax.clear()
+        self.evo_ax.plot(range(self.volume.shape[0]),
+                         self.volume[:, 0, y_pos, x_pos])
+
+        flat_index = y_pos * self.n_rows + x_pos
+        # print(f'flat index: {flat_index}')
+        corr_array = self.corr_mat[flat_index]
+        corr_map = np.reshape(corr_array,
+                              [self.n_rows, self.n_cols]
+                              )
+        # self.main_ax_image.set_data(corr_map)
+        # print(f"[debug] corr_min={np.nanmin(corr_map)}")
+        # print(f"[debug] corr_max={np.nanmax(corr_map)}")
+        # self.main_ax_image.set_cmap('coolwarm')
+        # self.colorbar.update_normal(self.main_ax_image)
+        # cbar_ticks = np.linspace(-1, 1, num=10, endpoint=True)
+        # self.colorbar.set_ticks(cbar_ticks)
+        # print(dir(type(self.main_ax_image)))
+        self.corr_ax_image.set_data(corr_map)
+        self.fig.canvas.draw()
