@@ -4,7 +4,7 @@ import nctoolkit as nc
 import numpy as np
 
 from math import log
-from slice_viewer import CorrelationViewer
+from stats_viewer import CorrelationViewer
 
 # only argument is netCDF file path, for now
 parser = argparse.ArgumentParser()
