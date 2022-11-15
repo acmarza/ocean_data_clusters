@@ -25,8 +25,6 @@ class CorrelationViewer(MultiSliceViewer):
         # each row is an array representing the evolution of a grid point
         evolutions = np.reshape(self.surface_slice, [t, x*y]).T
 
-        # quick numpy correlation analysis, no p-values
-
         # try reading correlation and p-value matrices from file
         try:
             corr_mat = np.load(corr_mat_file)
@@ -89,7 +87,7 @@ class CorrelationViewer(MultiSliceViewer):
         self.corr_ax_image = self.corr_ax.imshow(
             dummy_corr_map,
             origin='lower',
-            cmap='rainbow'
+            cmap=cmap
         )
 
         # put a colorbar on the correlation map
@@ -115,8 +113,9 @@ class CorrelationViewer(MultiSliceViewer):
 
         # clear the evolution plot and draw R-age over time for new location
         self.evo_ax.clear()
+        self.current_evo = self.surface_slice[:, y_pos, x_pos]
         self.evo_ax.plot(range(self.surface_slice.shape[0]),
-                         self.surface_slice[:, y_pos, x_pos])
+                         self.current_evo)
 
         # translate x-y coords of click to index of grid point in flat array
         flat_index = y_pos * self.n_rows + x_pos
@@ -153,6 +152,29 @@ class CorrelationViewer(MultiSliceViewer):
                 y_pos,
                 color='black',
                 marker='*'
+            )
+        except AttributeError:
+            pass
+
+    def change_slice(self, dimension, amount):
+        super().change_slice(dimension, amount)
+        self.update_evo_line()
+
+    def update_evo_line(self):
+        try:
+            for handle in self.evo_line:
+                handle.remove()
+        except AttributeError:
+            pass
+        try:
+            evo_line_x = [self.index[0], self.index[0]]
+            evo_line_y = [np.min(self.current_evo),
+                          np.max(self.current_evo)]
+
+            self.evo_line = self.evo_ax.plot(
+                evo_line_x,
+                evo_line_y,
+                color='black'
             )
         except AttributeError:
             pass
