@@ -10,8 +10,9 @@ class CorrelationViewer(MultiSliceViewer):
 
     def __init__(self, volume, title, colorbar=True, legend=False,
                  cmap='rainbow', corr_mat_file='corr_mat.npy',
-                 pval_mat_file='pval_mat.npy'):
+                 pval_mat_file='pval_mat.npy', pvalues=False):
 
+        print("[i] Initialising CorrelationViewer")
         try:
             # assuming volume is 4D of shape (t, z, y,x), take surface slice
             t, z, y, x = volume.shape
@@ -25,42 +26,47 @@ class CorrelationViewer(MultiSliceViewer):
         evolutions = np.reshape(self.surface_slice, [t, x*y]).T
 
         # quick numpy correlation analysis, no p-values
-        # self.corr_mat = np.corrcoef(evolutions)
 
         # try reading correlation and p-value matrices from file
         try:
             corr_mat = np.load(corr_mat_file)
-            pval_mat = np.load(pval_mat_file)
+            print(f"[i] Read in {corr_mat_file}")
+            if pvalues:
+                pval_mat = np.load(pval_mat_file)
+                print(f"[i] Read in {pval_mat_file}")
+        # compute correlation now if not read from file
         except FileNotFoundError:
-            # no file to read from, must compute the correlations
-            # intialise empty matrices to hold correlation coef and p-value
-            corr_mat = np.empty([y*x, y*x])
-            pval_mat = np.empty([y*x, y*x])
-
-            # run Pearson's r for every possible pair of grid point
-            # tqdm for nice progress bar
-            for i, evo1 in enumerate(tqdm(evolutions)):
-                # skip grid points missing data
-                if np.isnan(evo1).any():
-                    continue
-                for j, evo2 in enumerate(tqdm(evolutions, leave=False)):
-                    if np.isnan(evo2).any():
+            if not pvalues:
+                # if p-values not required, compute correlation with numpy
+                corr_mat = np.corrcoef(evolutions)
+            else:
+                # for p-values use pearson's r
+                # intialise empty matrices to hold correlation coef and p-value
+                pval_mat = np.empty([y*x, y*x])
+                corr_mat = np.empty([y*x, y*x])
+                # run Pearson's r for every possible pair of grid points
+                for i, evo1 in enumerate(tqdm(evolutions)):
+                    # skip grid points missing data
+                    if np.isnan(evo1).any():
                         continue
-                    # compute pearson's r and p-value and put in matrix
-                    corr_coef, pval = pearsonr(evo1, evo2)
-                    corr_mat[i, j] = corr_coef
-                    pval_mat[i, j] = pval
-            # save correlation analysis results to file
+                    for j, evo2 in enumerate(tqdm(evolutions, leave=False)):
+                        if np.isnan(evo2).any():
+                            continue
+                        # compute pearson's r and p-value and put in matrix
+                        corr_coef, pval = pearsonr(evo1, evo2)
+                        corr_mat[i, j] = corr_coef
+                        pval_mat[i, j] = pval
+                # save correlation analysis results to file
+                np.save(pval_mat_file, pval_mat)
             np.save(corr_mat_file, corr_mat)
-            np.save(pval_mat_file, pval_mat)
 
-        # debug
-        print(f"min: {np.min(pval_mat)}")
-        print(f"max: {np.max(pval_mat)}")
+        if pvalues:
+            # mask grid point where correlation not statistically significant
+            pval_mask = (pval_mat > 0.05)
+            corr_mat = np.ma.masked_array(corr_mat, mask=pval_mask)
 
         # initialise some class attributes
         self.corr_mat = corr_mat
-        self.pval_mat = pval_mat
         self.time_steps, self.n_cols, self.n_rows = t, y, x
 
         # call the init method of the MultiSliceViewer parent
@@ -96,7 +102,6 @@ class CorrelationViewer(MultiSliceViewer):
                    (self.evo_ax, self.corr_ax)) = plt.subplots(2, 2)
 
     def process_click(self, event):
-
         # ignore clicks outside the plots
         if not event.inaxes:
             return
@@ -133,7 +138,6 @@ class CorrelationViewer(MultiSliceViewer):
         self.fig.canvas.draw()
 
     def update_corr_loc_marker(self):
-
         # clear previous marker if present
         try:
             for handle in self.helper_point:
