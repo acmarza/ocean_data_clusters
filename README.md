@@ -61,7 +61,7 @@ Note: the -p flag will change the correlation analysis from a quick numpy.corrco
 - upper-left plot is the main view
 - upper-right plot is a surface slice across the z axis; a black line will appear here to help you locate slices taken perpendicular to x or y; click anywhere on this plot to set a location for further analysis (a marker will appear where you clicked)
 - lower-left plot is the evolution plot, this will activate once you click a point on the surface slice, showing the evolution of radiocarbon ages at that location in time; a vertical line appears when you change time-step in the main view, to help you locate yourself in time
-- lower-right plot is the correlation map, this will activate once you click a point on othe surface slice, showing the correlation coefficient of every other map point relative to the one you clicked
+- lower-right plot is the correlation map, this will activate once you click a point on the surface slice, showing the correlation coefficient of every other map point relative to the one you clicked
 - **left/right** arrow to move backward/forward in time
 - **up/down** arrow to navigate the current spatial dimension that the viewer is slicing across
 - press **x, y, z** to change the main view; a line on the plot below will appear to help you locate the current slice on a map
