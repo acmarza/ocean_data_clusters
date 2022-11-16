@@ -30,7 +30,10 @@ ds.assign(local_age=lambda x: -8267*log((1000+x.dc14)/1000))
 # get the data array
 xr_ds = ds.to_xarray()
 age_array = xr_ds['local_age'].__array__()
-age_array = age_array[:78]
+
+# slice before anomaly in our data
+# age_array = age_array[:78]
+
 # correct ages so they're not negative
 min_age = np.nanmin(age_array)
 age_array -= min_age
