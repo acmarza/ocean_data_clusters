@@ -10,7 +10,7 @@ class CorrelationViewer(MultiSliceViewer):
 
     def __init__(self, volume, title, colorbar=True, legend=False,
                  cmap='rainbow', corr_mat_file='corr_mat.npy',
-                 pval_mat_file='pval_mat.npy', pvalues=False):
+                 pval_mat_file='pval_mat.npy', pvalues=True):
 
         print("[i] Initialising CorrelationViewer")
         try:
@@ -26,18 +26,14 @@ class CorrelationViewer(MultiSliceViewer):
         evolutions = np.reshape(self.surface_slice, [t, x*y]).T
 
         # try reading correlation and p-value matrices from file
-        try:
-            corr_mat = np.load(corr_mat_file)
-            print(f"[i] Read in {corr_mat_file}")
-            if pvalues:
+        if pvalues:
+            try:
                 pval_mat = np.load(pval_mat_file)
                 print(f"[i] Read in {pval_mat_file}")
-        # compute correlation now if not read from file
-        except FileNotFoundError:
-            if not pvalues:
-                # if p-values not required, compute correlation with numpy
-                corr_mat = np.corrcoef(evolutions)
-            else:
+                corr_mat = np.load(corr_mat_file)
+                print(f"[i] Read in {corr_mat_file}")
+            # compute correlation now if not read from file
+            except FileNotFoundError:
                 # for p-values use pearson's r
                 # intialise empty matrices to hold correlation coef and p-value
                 pval_mat = np.empty([y*x, y*x])
@@ -56,12 +52,13 @@ class CorrelationViewer(MultiSliceViewer):
                         pval_mat[i, j] = pval
                 # save correlation analysis results to file
                 np.save(pval_mat_file, pval_mat)
-            np.save(corr_mat_file, corr_mat)
-
-        if pvalues:
+                np.save(corr_mat_file, corr_mat)
             # mask grid point where correlation not statistically significant
             pval_mask = (pval_mat > 0.05)
             corr_mat = np.ma.masked_array(corr_mat, mask=pval_mask)
+        else:
+            # if p-values not required, compute correlation with numpy
+            corr_mat = np.corrcoef(evolutions)
 
         # initialise some class attributes
         self.corr_mat = corr_mat
