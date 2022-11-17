@@ -1,6 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
+from scipy.cluster.hierarchy import linkage, fcluster
+from scipy.spatial.distance import squareform
 from scipy.stats.stats import pearsonr
 from slice_viewer import MultiSliceViewer
 from tqdm import tqdm
@@ -58,8 +61,33 @@ class CorrelationViewer(MultiSliceViewer):
             corr_mat = np.ma.masked_array(corr_mat, mask=pval_mask)
         else:
             # if p-values not required, compute correlation with numpy
+            # this is quick enough that there's no need to save to file
             corr_mat = np.corrcoef(evolutions)
 
+        # corr clustering - experimental
+        print(corr_mat.shape)
+        df = pd.DataFrame(corr_mat, index=None, columns=None)
+        print(df.shape)
+        droppedna = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
+        corr = np.array(droppedna)
+        corr =np.reshape(corr, droppedna.shape)
+        corr = (corr + corr.T) / 2
+        np.fill_diagonal(corr, 1)
+        # dissimilarity = 1 - np.abs(corr)
+        dissimilarity = 1 - corr
+        square = squareform(dissimilarity)
+        hierarchy = linkage(square, method='complete')
+        labels = fcluster(hierarchy, 0.4, criterion='distance')
+        print(len(np.unique(labels)))
+        print(len(labels))
+        df.loc[
+                df.index.isin(droppedna.index),
+                'labels'
+                ] = labels
+        labels_flat = np.ma.masked_array(df['labels'])
+        labels_shaped = np.reshape(labels_flat, (x, y))
+        plt.imshow(labels_shaped, origin='lower', cmap='rainbow')
+        plt.show()
         # initialise some class attributes
         self.corr_mat = corr_mat
         self.time_steps, self.n_cols, self.n_rows = t, y, x
