@@ -1,6 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
+from matplotlib.gridspec import GridSpec
+from scipy.cluster.hierarchy import linkage, fcluster
+from scipy.spatial.distance import squareform
 from scipy.stats.stats import pearsonr
 from slice_viewer import MultiSliceViewer
 from tqdm import tqdm
@@ -58,7 +62,48 @@ class CorrelationViewer(MultiSliceViewer):
             corr_mat = np.ma.masked_array(corr_mat, mask=pval_mask)
         else:
             # if p-values not required, compute correlation with numpy
+            # this is quick enough that there's no need to save to file
             corr_mat = np.corrcoef(evolutions)
+
+        # correlation clustering
+        # convert correlation matrix to pandas dataframe to drop nan rows/cols
+        df = pd.DataFrame(corr_mat, index=None, columns=None)
+        droppedna = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
+
+        # form dataframe back into a correlation matrix (without nans)
+        corr = np.array(droppedna)
+        corr = np.reshape(corr, droppedna.shape)
+
+        # corrections to reduce floating point errors
+        corr = (corr + corr.T) / 2
+        np.fill_diagonal(corr, 1)
+
+        # convert the correlation coefficients (higher is closer)
+        # into distances (lower is closer)
+        dissimilarity = 1 - corr
+
+        # dissimilarity matrix needs to be in this form for hierarchical
+        # clustering
+        square = squareform(dissimilarity)
+
+        # perform hierarchical clustering
+        hierarchy = linkage(square, method='complete')
+
+        # flatten the hierarchy into usable clusters
+        # get the cluster label assigned to each grid point as a flat array
+        labels = fcluster(hierarchy, 0.4, criterion='distance')
+
+        # put the labels into the whole dataframe (skipping nan rows/columns)
+        df.loc[
+                df.index.isin(droppedna.index),
+                'labels'
+                ] = labels
+
+        # get the labels back as a flat array, now including nans
+        labels_flat = np.ma.masked_array(df['labels'])
+
+        # shape the label back into a 2D array for plotting clusters on a map
+        labels_shaped = np.reshape(labels_flat, (x, y))
 
         # initialise some class attributes
         self.corr_mat = corr_mat
@@ -71,6 +116,13 @@ class CorrelationViewer(MultiSliceViewer):
         # listen for click events
         self.click_cid = self.fig.canvas.mpl_connect('button_press_event',
                                                      self.process_click)
+
+        # map out clusters
+        self.cluster_ax_image = self.cluster_ax.imshow(
+            labels_shaped,
+            origin='lower',
+            cmap=cmap
+        )
 
         # initialise correlation map with a gradient that
         # spans the range of r values in the corelation matrix
@@ -92,9 +144,15 @@ class CorrelationViewer(MultiSliceViewer):
 
     def init_plots(self):
         # separate this call to plt.subplots for easy override in children
-        # in this case we want 4 plots (2x2)
-        self.fig, ((self.main_ax, self.helper_ax),
-                   (self.evo_ax, self.corr_ax)) = plt.subplots(2, 2)
+        # in this case we want 4 plots (2x2+1)
+        self.fig = plt.figure()
+        gs = GridSpec(3, 2, width_ratios=[1, 1], height_ratios=[1, 1, 0.5],
+                      figure=self.fig)
+        self.main_ax = self.fig.add_subplot(gs[0])
+        self.helper_ax = self.fig.add_subplot(gs[1])
+        self.corr_ax = self.fig.add_subplot(gs[2])
+        self.cluster_ax = self.fig.add_subplot(gs[3])
+        self.evo_ax = self.fig.add_subplot(gs[4:])
 
     def process_click(self, event):
         # ignore clicks outside the plots
