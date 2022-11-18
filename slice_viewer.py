@@ -17,10 +17,11 @@ class MultiSliceViewer:
         # init class attributes
         self.volume = volume
         self.surface_slices = volume[:, 0]
-        self.fig, (self.main_ax, self.helper_ax) = plt.subplots(1, 2)
         self.index = [0, 0]
 
-        self.main_axes_image = self.main_ax.imshow(
+        self.init_plots()
+
+        self.main_ax_image = self.main_ax.imshow(
             volume[
                 self.index[0],
                 self.index[1]
@@ -28,7 +29,7 @@ class MultiSliceViewer:
             cmap=cmap,
         )
 
-        self.helper_ax.imshow(
+        self.helper_ax_image = self.helper_ax.imshow(
             self.surface_slices[self.index[0]],
             origin='lower',
             cmap=cmap,
@@ -36,21 +37,21 @@ class MultiSliceViewer:
 
         # put a colorbar next to main plot if requested
         if colorbar:
-            self.fig.colorbar(self.main_axes_image, ax=self.main_ax)
+            self.fig.colorbar(self.main_ax_image, ax=self.main_ax)
 
         # initialise view perpendicular to z
         self.set_view('z')
 
         # tell figure to wait for key events
-        self.callback_id = self.fig.canvas.mpl_connect('key_press_event',
-                                                       self.process_key)
+        self.keypress_cid = self.fig.canvas.mpl_connect('key_press_event',
+                                                        self.process_key)
 
         # title specified in function call
         plt.suptitle(title)
 
         if legend:
             values = np.unique(volume.ravel())
-            im = self.main_axes_image
+            im = self.main_ax_image
             colors = [im.cmap(im.norm(value)) for value in values]
             # create a patch (proxy artist) for every color
             patches = [patches.Patch(color=colors[i],
@@ -63,7 +64,11 @@ class MultiSliceViewer:
         # for animations
         self.video_file = video_file
 
-        # finally show the figure
+    def init_plots(self):
+        # separate this call to plt.subplots for easy override in children
+        self.fig, (self.main_ax, self.helper_ax) = plt.subplots(1, 2)
+
+    def show(self):
         plt.show()
 
     def set_view(self, view):
@@ -94,7 +99,7 @@ class MultiSliceViewer:
             'y': 'upper',
             'z': 'lower'
         }
-        self.main_axes_image.origin = origin_dict[view]
+        self.main_ax_image.origin = origin_dict[view]
 
         # assign the new view to the figure to be used when updating info text
         self.view = view
@@ -134,16 +139,13 @@ class MultiSliceViewer:
                                     )
 
     def change_slice(self, dimension, amount):
-        try:
-            self.helper_ax.lines.pop(0)
-        except IndexError:
-            pass
         # increment index (wrap around with modulo)
         self.index[dimension] += amount
         self.index[dimension] %= self.volume.shape[dimension]
 
         # set the slice to view based on the new index
-        self.main_ax.images[0].set_array(
+        # self.main_ax.images[0].set_array(
+        self.main_ax_image.set_data(
             self.volume[
                 self.index[0],
                 self.index[1]
@@ -151,9 +153,18 @@ class MultiSliceViewer:
         )
 
         # also update the surface view if time changed
-        self.helper_ax.images[0].set_array(self.surface_slices[self.index[0]])
+        self.helper_ax_image.set_data(self.surface_slices[self.index[0]])
 
         self.update_suptitle_text()
+
+        self.update_slice_locator()
+
+    def update_slice_locator(self):
+        try:
+            for handle in self.helper_line:
+                handle.remove()
+        except AttributeError:
+            pass
 
         if(self.view != 'z'):
             helper_line_x = [self.index[1], self.index[1]]
