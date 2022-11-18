@@ -64,30 +64,48 @@ class CorrelationViewer(MultiSliceViewer):
             # this is quick enough that there's no need to save to file
             corr_mat = np.corrcoef(evolutions)
 
-        # corr clustering - experimental
-        print(corr_mat.shape)
+        # correlation clustering
+        # convert correlation matrix to pandas dataframe to drop nan rows/cols
         df = pd.DataFrame(corr_mat, index=None, columns=None)
-        print(df.shape)
         droppedna = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
+
+        # form dataframe back into a correlation matrix (without nans)
         corr = np.array(droppedna)
-        corr =np.reshape(corr, droppedna.shape)
+        corr = np.reshape(corr, droppedna.shape)
+
+        # corrections to reduce floating point errors
         corr = (corr + corr.T) / 2
         np.fill_diagonal(corr, 1)
-        # dissimilarity = 1 - np.abs(corr)
+
+        # convert the correlation coefficients (higher is closer)
+        # into distances (lower is closer)
         dissimilarity = 1 - corr
+
+        # dissimilarity matrix needs to be in this form for hierarchical
+        # clustering
         square = squareform(dissimilarity)
+
+        # perform hierarchical clustering
         hierarchy = linkage(square, method='complete')
+
+        # flatten the hierarchy into usable clusters
+        # get the cluster label assigned to each grid point as a flat array
         labels = fcluster(hierarchy, 0.4, criterion='distance')
-        print(len(np.unique(labels)))
-        print(len(labels))
+
+        # put the labels into the whole dataframe (skipping nan rows/columns)
         df.loc[
                 df.index.isin(droppedna.index),
                 'labels'
                 ] = labels
+
+        # get the labels back as a flat array, now including nans
         labels_flat = np.ma.masked_array(df['labels'])
+
+        # shape the label back into a 2D array for plotting clusters on a map
         labels_shaped = np.reshape(labels_flat, (x, y))
         plt.imshow(labels_shaped, origin='lower', cmap='rainbow')
         plt.show()
+
         # initialise some class attributes
         self.corr_mat = corr_mat
         self.time_steps, self.n_cols, self.n_rows = t, y, x
