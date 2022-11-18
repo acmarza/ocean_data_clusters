@@ -26,8 +26,8 @@ class CorrelationViewer(MultiSliceViewer):
             t, y, x = volume.shape
             self.surface_slice = volume
 
-        # each row is an array representing the evolution of a grid point
-        evolutions = np.reshape(self.surface_slice, [t, x*y]).T
+        # each row in evolutions is the R-age time series for a grid point
+        self.evolutions = np.reshape(self.surface_slice, [t, x*y]).T
 
         # try reading correlation and p-value matrices from file
         if pvalues:
@@ -43,11 +43,14 @@ class CorrelationViewer(MultiSliceViewer):
                 pval_mat = np.empty([y*x, y*x])
                 corr_mat = np.empty([y*x, y*x])
                 # run Pearson's r for every possible pair of grid points
-                for i, evo1 in enumerate(tqdm(evolutions)):
+                for i, evo1 in enumerate(tqdm(self.evolutions)):
                     # skip grid points missing data
                     if np.isnan(evo1).any():
                         continue
-                    for j, evo2 in enumerate(tqdm(evolutions, leave=False)):
+                    for j, evo2 in enumerate(
+                        tqdm(self.evolutions, leave=False)
+                    ):
+                        # skip grid points missing data
                         if np.isnan(evo2).any():
                             continue
                         # compute pearson's r and p-value and put in matrix
@@ -63,7 +66,7 @@ class CorrelationViewer(MultiSliceViewer):
         else:
             # if p-values not required, compute correlation with numpy
             # this is quick enough that there's no need to save to file
-            corr_mat = np.corrcoef(evolutions)
+            corr_mat = np.corrcoef(self.evolutions)
 
         # correlation clustering
         # convert correlation matrix to pandas dataframe to drop nan rows/cols
@@ -166,14 +169,14 @@ class CorrelationViewer(MultiSliceViewer):
         # save last clicked point
         self.corr_loc = [x_pos, y_pos]
 
-        # clear the evolution plot and draw R-age over time for new location
-        self.evo_ax.clear()
-        self.current_evo = self.surface_slice[:, y_pos, x_pos]
-        self.evo_ax.plot(range(self.surface_slice.shape[0]),
-                         self.current_evo)
-
         # translate x-y coords of click to index of grid point in flat array
         flat_index = y_pos * self.n_rows + x_pos
+
+        # clear the evolution plot and draw R-age over time for new location
+        self.evo_ax.clear()
+        self.current_evo = self.evolutions[flat_index]
+        self.evo_ax.plot(range(self.surface_slice.shape[0]),
+                         self.current_evo)
 
         # get the row in the correlation map corresponding
         # to the clicked grid point
@@ -233,3 +236,13 @@ class CorrelationViewer(MultiSliceViewer):
             )
         except AttributeError:
             pass
+
+    def plot_evolutions(self):
+        # plot evolution of every grid point over time
+        for point in tqdm(range(0, self.evolutions.shape[0]),
+                          desc="plotting combined time series"):
+            plt.plot(range(0, self.time_steps), self.evolutions[point, :])
+        plt.xlabel('time step')
+        plt.ylabel('age')
+        plt.title('age over time')
+        plt.show()

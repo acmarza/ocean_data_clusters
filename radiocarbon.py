@@ -7,11 +7,12 @@ import pandas as pd
 import pickle
 
 from math import log
+from stats_viewer import CorrelationViewer
 from tqdm import tqdm
 from tslearn.clustering import TimeSeriesKMeans
 from tslearn.utils import to_time_series_dataset
 
-print("[i] Starting time series clustering workflow")
+print("[i] Starting R-ages analysis workflow")
 
 # define and parse commandline arguments
 parser = argparse.ArgumentParser()
@@ -27,12 +28,12 @@ try:
 except Exception:
     print('[!] Config file not passed via commandline')
 
-# load data from file, asking user to specify a path if not provided in
+# load data from file, asking user to specify a path if not provided
 try:
     nc_file = config['default']['nc_file']
 except (KeyError, NameError):
     print('[i] Data file path not provided')
-    nc_file = input("[>] Please type the path of the netCDF file to use: ")
+    nc_file = input("[>] Type the path of the netCDF file to use: ")
 print(f"[i] NetCDF file: {nc_file}")
 
 # load in the data
@@ -74,27 +75,35 @@ age_array = xr_ds['local_age'].__array__()
 min_age = np.nanmin(age_array)
 age_array -= min_age
 
-# produce an array containing the R-age time series at each grid point
-t, z, y, x = age_array.shape
-evolutions = np.reshape(age_array[:, 0], [t, x*y]).T
-
-# find out from config or interactively whether user wants to plot all time
-# series on one plot
 try:
-    plot_all_evo = config['timeseries'].getboolean('plot_all_evo')
-except (NameError, KeyError):
-    yn = input("[>] Show a plot of all the R-age timeseries? (y/n): ")
-    plot_all_evo = (yn == 'y')
+    run_ts = config['timeseries'].getboolean('run')
+except (KeyError, NameError):
+    print("[!] You have not specified whether to run timeseries clustering")
+    yn = input("[>] Run timeseries clustering? (y/n): ")
+    run_ts = (yn == 'y')
 
-# draw said plot if desired
-if plot_all_evo:
-    # plot evolution of every grid point over time
-    for point in tqdm(range(0, x*y), desc="plotting combined time series"):
-        plt.plot(range(0, t), evolutions[point, :])
-    plt.xlabel('time step')
-    plt.ylabel('age')
-    plt.title('age over time')
-    plt.show()
+if run_ts:
+    # produce an array containing the R-age time series at each grid point
+    t, z, y, x = age_array.shape
+    evolutions = np.reshape(age_array[:, 0], [t, x*y]).T
+
+    # find out from config or interactively whether user wants to plot all time
+    # series on one plot
+    try:
+        plot_all_evo = config['timeseries'].getboolean('plot_all_evo')
+    except (NameError, KeyError):
+        yn = input("[>] Show a plot of all the R-age timeseries? (y/n): ")
+        plot_all_evo = (yn == 'y')
+
+    # draw said plot if desired
+    if plot_all_evo:
+        # plot evolution of every grid point over time
+        for point in tqdm(range(0, x*y), desc="plotting combined time series"):
+            plt.plot(range(0, t), evolutions[point, :])
+        plt.xlabel('time step')
+        plt.ylabel('age')
+        plt.title('age over time')
+        plt.show()
 
 # convert array of time series to pandas dataframe to drop NaN entries
 # then back to array, then to time series dataset for use with tslearn
@@ -171,3 +180,23 @@ labels_shaped = np.reshape(labels_flat, [x, y])
 # finally view the clusters on a map
 plt.imshow(labels_shaped, origin='lower')
 plt.show()
+
+# find out from config or interactively whether to mask using p-values
+try:
+    pvalues = config['correlation'].getboolean('pvalues')
+except (NameError, KeyError):
+    yn = input("[>] Mask out grid point with insignificant \
+               ( p > 0.05 ) correlation? (y/n): ")
+    pvalues = (yn == 'y')
+
+try:
+    pvalues = config['correlation'].getboolean('pvalues')
+except (NameError, KeyError):
+    yn = input("[>] Mask out grid point with insignificant \
+               ( p > 0.05 ) correlation? (y/n): ")
+    pvalues = (yn == 'y')
+
+# visualize
+viewer = CorrelationViewer(age_array, 'Ages', pvalues=pvalues)
+plt.show()
+
