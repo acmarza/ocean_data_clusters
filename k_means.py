@@ -38,8 +38,8 @@ except Exception:
 # load data from file, asking user to specify a path if not provided in config
 try:
     nc_file = config['default']['nc_file']
-except NameError:
-    print('[i] Data file path not provided in config')
+except (NameError, KeyError):
+    print('[i] Data file path not provided')
     nc_file = input("[>] Please type the path of the netCDF file to use: ")
 print(f"[i] NetCDF file: {nc_file}")
 
@@ -48,7 +48,7 @@ nc_data = nc.Dataset(nc_file)
 
 # get parameters to run k-means for from file, or interactively
 try:
-    selected_vars = config['default']['selected_vars'].split(",")
+    selected_vars = config['k-means']['selected_vars'].split(",")
 except KeyError:
 
     # get an alphabetical list of plottable variables
@@ -103,12 +103,12 @@ preprocessor = Pipeline(
 )
 
 try:
-    n_init = int(config['default']['n_init'])
+    n_init = int(config['k-means']['n_init'])
 except NameError:
     # will not ask but use the kmeans default
     n_init = 10
 try:
-    max_iter = int(config['default']['max_iter'])
+    max_iter = int(config['k-means']['max_iter'])
 except NameError:
     # will not ask but use the kmeans default
     max_iter = 300
@@ -138,11 +138,11 @@ pipe = Pipeline(
 # performance over a range of k with different metrics
 # otherwise proceed to k-means
 try:
-    optimal_k = int(config['default']['optimal_k'])
+    n_clusters = int(config['k-means']['n_clusters'])
     metrics_mode = False
 except KeyError:
     try:
-        optimal_k = int(input(
+        n_clusters = int(input(
             "[>] Enter number of clusters now, or leave blank"
             " to compute clustering metrics for a range of k: "
              ))
@@ -152,7 +152,7 @@ except KeyError:
         print("[i] When finished, re-run script with your choice of k")
         metrics_mode = True
         try:
-            max_clusters = int(config['default']['max_clusters'])
+            max_clusters = int(config['k-means']['max_clusters'])
         except KeyError:
             max_clusters = int(input("[>] Max clusters: "))
 
@@ -230,7 +230,7 @@ else:
     # metrics mode off
     # run k-means with chosen k
     kmeans = pipe['clusterer']['kmeans']
-    kmeans.n_clusters = optimal_k
+    kmeans.n_clusters = n_clusters
     print("[i] Running k-means, please stand by...")
     pipe.fit(features)
     labels = kmeans.labels_
@@ -238,7 +238,7 @@ else:
     # to get consistent colors for the next plots
     palette = 'tab10'
     cmap = cm.get_cmap(palette)
-    labels_colors = cmap(np.linspace(0, 1, num=optimal_k))
+    labels_colors = cmap(np.linspace(0, 1, num=n_clusters))
 
     # rescale the centroids back to original data ranges
     centroids = kmeans.cluster_centers_
@@ -268,7 +268,7 @@ else:
 
     # map out the clusters each with its own color
     plot_title =\
-        f"Kmeans result with {optimal_k} clusters based on {selected_vars}"
+        f"Kmeans result with {n_clusters} clusters based on {selected_vars}"
     MultiSliceViewer(labels_shaped, title=plot_title, colorbar=False,
                      legend=True, cmap=palette).show()
 # to do
