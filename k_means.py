@@ -272,7 +272,5 @@ else:
     MultiSliceViewer(labels_shaped, title=plot_title, colorbar=False,
                      legend=True, cmap=palette).show()
 # to do
-#   rewrite comments for multi slice viewer
-#   possibly replace netcdf4 with nctoolkit and xarray
 #   add lon/lat to viewer
 #   add scatterplot when n_params <= 3
