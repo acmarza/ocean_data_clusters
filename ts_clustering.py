@@ -81,7 +81,7 @@ evolutions = np.reshape(age_array[:, 0], [t, x*y]).T
 # find out from config or interactively whether user wants to plot all time
 # series on one plot
 try:
-    plot_all_evo = config['timeseries']['plot_all_evo']
+    plot_all_evo = config['timeseries'].getboolean('plot_all_evo')
 except (NameError, KeyError):
     yn = input("[>] Show a plot of all the R-age timeseries? (y/n): ")
     plot_all_evo = (yn == 'y')
