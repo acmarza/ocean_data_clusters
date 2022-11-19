@@ -5,7 +5,7 @@ import numpy as np
 
 class MultiSliceViewer:
 
-    def __init__(self, volume, title, colorbar=True, legend=False,
+    def __init__(self, volume, title="Viewer", colorbar=True, legend=False,
                  cmap='rainbow'):
         # if data has only 3 dimensions; assume it is missing the depth axis
         # reshape into 4D array with single depth level
@@ -46,7 +46,6 @@ class MultiSliceViewer:
         self.keypress_cid = self.fig.canvas.mpl_connect('key_press_event',
                                                         self.process_key)
 
-        # title specified in function call
         plt.suptitle(title)
 
         if legend:
@@ -125,11 +124,11 @@ class MultiSliceViewer:
         # update the plot
         self.fig.canvas.draw()
 
-    def update_suptitle_text(self):
+    def update_main_ax_title(self):
         time_step, depth_step = self.index
         max_time_steps, max_depth_steps, _, _ = self.volume.shape
         self.main_ax.title.set_text(f"time: "
-                                    f"{time_step+1}/{max_time_steps}\n"
+                                    f"{time_step+1}/{max_time_steps}; "
                                     f"{self.view}: "
                                     f"{depth_step+1}/{max_depth_steps}"
                                     )
@@ -151,7 +150,7 @@ class MultiSliceViewer:
         # also update the surface view if time changed
         self.helper_ax_image.set_data(self.surface_slices[self.index[0]])
 
-        self.update_suptitle_text()
+        self.update_main_ax_title()
 
         self.update_slice_locator()
 

@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 
 from matplotlib.gridspec import GridSpec
+from matplotlib.widgets import RadioButtons
 from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.distance import squareform
 from scipy.stats.stats import pearsonr
@@ -12,7 +13,8 @@ from tqdm import tqdm
 
 class CorrelationViewer(MultiSliceViewer):
 
-    def __init__(self, volume, title, colorbar=True, legend=False,
+    def __init__(self, volume, title="Correlation Viewer",
+                 colorbar=True,
                  cmap='rainbow', corr_mat_file='corr_mat.npy',
                  pval_mat_file='pval_mat.npy', pvalues=True):
 
@@ -79,18 +81,32 @@ class CorrelationViewer(MultiSliceViewer):
         labels_shaped = self.corr_cluster()
 
         # call the init method of the MultiSliceViewer parent
-        super().__init__(volume, title, colorbar=colorbar, legend=legend,
+        super().__init__(volume, title=title, colorbar=colorbar, legend=False,
                          cmap=cmap)
 
-        # listen for click events
-        self.click_cid = self.fig.canvas.mpl_connect('button_press_event',
-                                                     self.process_click)
+        # listen for click events only when mouse over helper_ax
+        self.enter_helper_ax_cid = self.fig.canvas.mpl_connect(
+            'axes_enter_event', self.enter_helper_ax_event)
+        self.exit_helper_ax_cid = self.fig.canvas.mpl_connect(
+            'axes_leave_event', self.leave_helper_ax_event)
 
         # map out clusters
         self.cluster_ax_image = self.cluster_ax.imshow(
             labels_shaped,
             origin='lower',
             cmap=cmap
+        )
+
+        # radio buttons for changing clustering method
+        self.linkage_method_radio = RadioButtons(
+            self.linkage_method_ax,
+            ('single', 'complete', 'average', 'weighted', 'centroid',
+             'median', 'ward'),
+            active=1
+        )
+
+        self.linkage_method_radio.on_clicked(
+            self.linkage_method_radio_on_click
         )
 
         # initialise correlation map with a gradient that
@@ -115,13 +131,19 @@ class CorrelationViewer(MultiSliceViewer):
         # separate this call to plt.subplots for easy override in children
         # in this case we want 4 plots (2x2+1)
         self.fig = plt.figure()
-        gs = GridSpec(3, 2, width_ratios=[1, 1], height_ratios=[1, 1, 0.5],
+        gs = GridSpec(3, 4,
+                      width_ratios=[1, 1, 0.5, 0.5],
+                      height_ratios=[1, 1, 0.5],
                       figure=self.fig)
+
         self.main_ax = self.fig.add_subplot(gs[0])
         self.helper_ax = self.fig.add_subplot(gs[1])
-        self.corr_ax = self.fig.add_subplot(gs[2])
-        self.cluster_ax = self.fig.add_subplot(gs[3])
-        self.evo_ax = self.fig.add_subplot(gs[4:])
+        self.corr_ax = self.fig.add_subplot(gs[4])
+        self.cluster_ax = self.fig.add_subplot(gs[5])
+        self.linkage_method_ax = self.fig.add_subplot(gs[6])
+        self.evo_ax = self.fig.add_subplot(gs[8:])
+
+        self.fig.set_constrained_layout(True)
 
     def process_click(self, event):
         # ignore clicks outside the plots
@@ -225,8 +247,6 @@ class CorrelationViewer(MultiSliceViewer):
         dissimilarity = (dissimilarity + dissimilarity.T) / 2
         np.fill_diagonal(dissimilarity, 0)
 
-        print(dissimilarity.shape)
-
         # dissimilarity matrix needs to be in this form for hierarchical
         # clustering
         square = squareform(dissimilarity)
@@ -254,3 +274,19 @@ class CorrelationViewer(MultiSliceViewer):
         labels_shaped = np.reshape(labels_flat, (self.n_rows, self.n_cols))
 
         return labels_shaped
+
+    def linkage_method_radio_on_click(self, label):
+        labels_shaped = self.corr_cluster(linkage_method=label)
+        self.cluster_ax_image.set_data(labels_shaped)
+        self.fig.canvas.draw()
+
+    def enter_helper_ax_event(self, event):
+        if event.inaxes == self.helper_ax:
+            self.click_helper_ax_cid = self.fig.canvas.mpl_connect(
+                'button_press_event', self.process_click)
+
+    def leave_helper_ax_event(self, event):
+        if event.inaxes == self.helper_ax:
+            self.fig.canvas.mpl_disconnect(
+                self.click_helper_ax_cid
+            )

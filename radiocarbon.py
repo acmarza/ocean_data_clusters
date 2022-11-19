@@ -220,5 +220,5 @@ if run_corr:
         kwargs['pval_mat_file'] = pval_mat_file
 
     # visualize
-    viewer = CorrelationViewer(age_array, 'Ages', **kwargs)
+    viewer = CorrelationViewer(age_array, title="R-ages", **kwargs)
     plt.show()
