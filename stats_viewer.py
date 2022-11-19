@@ -39,7 +39,7 @@ class CorrelationViewer(MultiSliceViewer):
             # compute correlation now if not read from file
             except FileNotFoundError:
                 # for p-values use pearson's r
-                # intialise empty matrices to hold correlation coef and p-value
+                # initialise empty matrices to hold corr coefs and p-value
                 pval_mat = np.empty([y*x, y*x])
                 corr_mat = np.empty([y*x, y*x])
                 # run Pearson's r for every possible pair of grid points
@@ -64,7 +64,8 @@ class CorrelationViewer(MultiSliceViewer):
                 np.save(corr_mat_file, corr_mat)
             # mask grid point where correlation not statistically significant
             pval_mask = (pval_mat > 0.05)
-            corr_mat = np.ma.masked_array(corr_mat, mask=pval_mask)
+            corr_mat = np.ma.masked_array(corr_mat, mask=pval_mask,
+                                          fill_value=np.nan)
         else:
             # if p-values not required, compute correlation with numpy
             # this is quick enough that there's no need to save to file
@@ -76,7 +77,6 @@ class CorrelationViewer(MultiSliceViewer):
         # save correlation matrix as attribute and run clustering
         self.corr_mat = corr_mat
         labels_shaped = self.corr_cluster()
-
 
         # call the init method of the MultiSliceViewer parent
         super().__init__(volume, title, colorbar=colorbar, legend=legend,
@@ -206,7 +206,6 @@ class CorrelationViewer(MultiSliceViewer):
     def corr_cluster(self, linkage_method='complete', fcluster_thresh=0.4,
                      fcluster_criterion='distance'):
 
-        # correlation clustering
         # convert correlation matrix to pandas dataframe to drop nan rows/cols
         df = pd.DataFrame(self.corr_mat, index=None, columns=None)
         droppedna = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
@@ -222,6 +221,11 @@ class CorrelationViewer(MultiSliceViewer):
         # convert the correlation coefficients (higher is closer)
         # into distances (lower is closer)
         dissimilarity = 1 - corr
+
+        dissimilarity = (dissimilarity + dissimilarity.T) / 2
+        np.fill_diagonal(dissimilarity, 0)
+
+        print(dissimilarity.shape)
 
         # dissimilarity matrix needs to be in this form for hierarchical
         # clustering
