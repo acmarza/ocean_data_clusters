@@ -26,6 +26,7 @@ class MultiSliceViewer:
                 self.index[1]
             ],
             cmap=cmap,
+            origin='lower'
         )
 
         self.helper_ax_image = self.helper_ax.imshow(

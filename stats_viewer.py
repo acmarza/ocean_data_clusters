@@ -43,7 +43,9 @@ class CorrelationViewer(MultiSliceViewer):
                 pval_mat = np.empty([y*x, y*x])
                 corr_mat = np.empty([y*x, y*x])
                 # run Pearson's r for every possible pair of grid points
-                for i, evo1 in enumerate(tqdm(evolutions)):
+                for i, evo1 in enumerate(tqdm(evolutions,
+                                              desc="[i] Computing Pearson's r \
+                                              and p-values: ")):
                     # skip grid points missing data
                     if np.isnan(evo1).any():
                         continue
@@ -68,49 +70,13 @@ class CorrelationViewer(MultiSliceViewer):
             # this is quick enough that there's no need to save to file
             corr_mat = np.corrcoef(evolutions)
 
-        # correlation clustering
-        # convert correlation matrix to pandas dataframe to drop nan rows/cols
-        df = pd.DataFrame(corr_mat, index=None, columns=None)
-        droppedna = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
-
-        # form dataframe back into a correlation matrix (without nans)
-        corr = np.array(droppedna)
-        corr = np.reshape(corr, droppedna.shape)
-
-        # corrections to reduce floating point errors
-        corr = (corr + corr.T) / 2
-        np.fill_diagonal(corr, 1)
-
-        # convert the correlation coefficients (higher is closer)
-        # into distances (lower is closer)
-        dissimilarity = 1 - corr
-
-        # dissimilarity matrix needs to be in this form for hierarchical
-        # clustering
-        square = squareform(dissimilarity)
-
-        # perform hierarchical clustering
-        hierarchy = linkage(square, method='complete')
-
-        # flatten the hierarchy into usable clusters
-        # get the cluster label assigned to each grid point as a flat array
-        labels = fcluster(hierarchy, 0.4, criterion='distance')
-
-        # put the labels into the whole dataframe (skipping nan rows/columns)
-        df.loc[
-                df.index.isin(droppedna.index),
-                'labels'
-                ] = labels
-
-        # get the labels back as a flat array, now including nans
-        labels_flat = np.ma.masked_array(df['labels'])
-
-        # shape the label back into a 2D array for plotting clusters on a map
-        labels_shaped = np.reshape(labels_flat, (x, y))
-
-        # initialise some class attributes
-        self.corr_mat = corr_mat
+        # some handy attributes
         self.time_steps, self.n_cols, self.n_rows = t, y, x
+
+        # save correlation matrix as attribute and run clustering
+        self.corr_mat = corr_mat
+        labels_shaped = self.corr_cluster()
+
 
         # call the init method of the MultiSliceViewer parent
         super().__init__(volume, title, colorbar=colorbar, legend=legend,
@@ -132,9 +98,9 @@ class CorrelationViewer(MultiSliceViewer):
         dummy_corr_map = np.reshape(np.linspace(
                 start=np.nanmin(self.corr_mat),
                 stop=np.nanmax(self.corr_mat),
-                num=self.n_rows*self.n_cols,
+                num=x*y,
                 endpoint=True
-            ), [self.n_rows, self.n_cols])
+            ), [x, y])
 
         self.corr_ax_image = self.corr_ax.imshow(
             dummy_corr_map,
@@ -236,3 +202,51 @@ class CorrelationViewer(MultiSliceViewer):
             )
         except AttributeError:
             pass
+
+    def corr_cluster(self, linkage_method='complete', fcluster_thresh=0.4,
+                     fcluster_criterion='distance'):
+
+        # correlation clustering
+        # convert correlation matrix to pandas dataframe to drop nan rows/cols
+        df = pd.DataFrame(self.corr_mat, index=None, columns=None)
+        droppedna = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
+
+        # form dataframe back into a correlation matrix (without nans)
+        corr = np.array(droppedna)
+        corr = np.reshape(corr, droppedna.shape)
+
+        # corrections to reduce floating point errors
+        corr = (corr + corr.T) / 2
+        np.fill_diagonal(corr, 1)
+
+        # convert the correlation coefficients (higher is closer)
+        # into distances (lower is closer)
+        dissimilarity = 1 - corr
+
+        # dissimilarity matrix needs to be in this form for hierarchical
+        # clustering
+        square = squareform(dissimilarity)
+
+        # perform hierarchical clustering
+        hierarchy = linkage(square, method=linkage_method)
+
+        # flatten the hierarchy into usable clusters
+        # get the cluster label assigned to each grid point as a flat array
+        labels = fcluster(hierarchy,
+                          fcluster_thresh,
+                          criterion=fcluster_criterion
+                          )
+
+        # put the labels into the whole dataframe (skipping nan rows/columns)
+        df.loc[
+                df.index.isin(droppedna.index),
+                'labels'
+                ] = labels
+
+        # get the labels back as a flat array, now including nans
+        labels_flat = np.ma.masked_array(df['labels'])
+
+        # shape the label back into a 2D array for plotting clusters on a map
+        labels_shaped = np.reshape(labels_flat, (self.n_rows, self.n_cols))
+
+        return labels_shaped

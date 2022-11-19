@@ -194,10 +194,31 @@ if run_corr:
     try:
         pvalues = config['correlation'].getboolean('pvalues')
     except (NameError, KeyError):
-        yn = input("[>] Mask out grid point with insignificant \
+        yn = input("[>] Mask out grid points with insignificant \
                 ( p > 0.05 ) correlation? (y/n): ")
         pvalues = (yn == 'y')
 
+    # if taking into account p-values, will use the slower scipy pearsonr
+    # so it's better to work with save files
+    kwargs = {'pvalues': pvalues}
+    if pvalues:
+        try:
+            corr_mat_file = config['correlation']['corr_mat_file']
+        except (KeyError, NameError):
+            print("[!] Correlation matrix save file not provided")
+            corr_mat_file = input(
+                "[>] Enter file path to save/read correlation matrix now: "
+            )
+        try:
+            pval_mat_file = config['correlation']['pval_mat_file']
+        except (KeyError, NameError):
+            print("[!] P-value matrix save file not provided")
+            pval_mat_file = input(
+                "[>] Enter file path to save/read p-value matrix now: "
+            )
+        kwargs['corr_mat_file'] = corr_mat_file
+        kwargs['pval_mat_file'] = pval_mat_file
+
     # visualize
-    viewer = CorrelationViewer(age_array, 'Ages', pvalues=pvalues)
+    viewer = CorrelationViewer(age_array, 'Ages', **kwargs)
     plt.show()
