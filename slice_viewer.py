@@ -6,7 +6,7 @@ import numpy as np
 class MultiSliceViewer:
 
     def __init__(self, volume, title="Viewer", colorbar=True, legend=False,
-                 cmap='rainbow'):
+                 cmap='rainbow', fig=None):
         # if data has only 3 dimensions; assume it is missing the depth axis
         # reshape into 4D array with single depth level
         if len(volume.shape) == 3:
@@ -18,26 +18,11 @@ class MultiSliceViewer:
         self.surface_slices = volume[:, 0]
         self.index = [0, 0]
 
-        self.init_plots()
+        self.fig = fig if fig else plt.figure()
+        self.cmap = cmap
 
-        self.main_ax_image = self.main_ax.imshow(
-            volume[
-                self.index[0],
-                self.index[1]
-            ],
-            cmap=cmap,
-            origin='lower'
-        )
-
-        self.helper_ax_image = self.helper_ax.imshow(
-            self.surface_slices[self.index[0]],
-            origin='lower',
-            cmap=cmap,
-        )
-
-        # put a colorbar next to main plot if requested
-        if colorbar:
-            self.fig.colorbar(self.main_ax_image, ax=self.main_ax)
+        self.init_main_ax(colorbar, legend)
+        self.init_helper_ax()
 
         # initialise view perpendicular to z
         self.set_view('z')
@@ -46,10 +31,26 @@ class MultiSliceViewer:
         self.keypress_cid = self.fig.canvas.mpl_connect('key_press_event',
                                                         self.process_key)
 
-        plt.suptitle(title)
+        self.fig.suptitle(title)
+
+    def init_main_ax(self, colorbar, legend):
+
+        self.main_ax = self.fig.add_subplot(121)
+
+        self.main_ax_image = self.main_ax.imshow(
+            self.volume[
+                self.index[0],
+                self.index[1]
+            ],
+            cmap=self.cmap,
+            origin='lower'
+        )
+
+        if colorbar:
+            self.fig.colorbar(self.main_ax_image, ax=self.main_ax)
 
         if legend:
-            values = np.unique(volume.ravel())
+            values = np.unique(self.volume.ravel())
             im = self.main_ax_image
             colors = [im.cmap(im.norm(value)) for value in values]
             # create a patch (proxy artist) for every color
@@ -61,9 +62,15 @@ class MultiSliceViewer:
                                 bbox_to_anchor=(-0.25, 0.5),
                                 loc="center left")
 
-    def init_plots(self):
-        # separate this call to plt.subplots for easy override in children
-        self.fig, (self.main_ax, self.helper_ax) = plt.subplots(1, 2)
+    def init_helper_ax(self):
+
+        self.helper_ax = self.fig.add_subplot(122)
+
+        self.helper_ax_image = self.helper_ax.imshow(
+            self.surface_slices[self.index[0]],
+            origin='lower',
+            cmap=self.cmap,
+        )
 
     def show(self):
         plt.show()
