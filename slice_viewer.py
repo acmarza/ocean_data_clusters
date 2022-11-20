@@ -180,3 +180,4 @@ class MultiSliceViewer:
                 helper_line_y,
                 color='black'
             )
+            # to do: fix colorbar position and color/norm

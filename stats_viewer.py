@@ -54,9 +54,9 @@ class CorrelationMatrixViewer:
 
         # listen for click events only when mouse over corr_ax
         self.enter_corr_ax_cid = self.fig.canvas.mpl_connect(
-            'axes_enter_event', self.enter_helper_ax_event)
+            'axes_enter_event', self.enter_corr_ax_event)
         self.exit_corr_ax_cid = self.fig.canvas.mpl_connect(
-            'axes_leave_event', self.leave_helper_ax_event)
+            'axes_leave_event', self.leave_corr_ax_event)
 
         self.update_corr_map()
 
@@ -198,12 +198,12 @@ class CorrelationMatrixViewer:
         self.cluster_ax_image.set_data(labels_shaped)
         self.fig.canvas.draw()
 
-    def enter_helper_ax_event(self, event):
+    def enter_corr_ax_event(self, event):
         if event.inaxes == self.corr_ax:
             self.click_corr_ax_cid = self.fig.canvas.mpl_connect(
                 'button_press_event', self.process_corr_ax_click)
 
-    def leave_helper_ax_event(self, event):
+    def leave_corr_ax_event(self, event):
         if event.inaxes == self.corr_ax:
             self.fig.canvas.mpl_disconnect(
                 self.click_corr_ax_cid
@@ -227,7 +227,6 @@ class CorrelationViewer(MultiSliceViewer):
             t, y, x = volume.shape
             self.surface_slice = volume
 
-        # call the init method of the MultiSliceViewer parent
         self.fig = plt.figure()
         self.evo_ax = self.fig.add_subplot()
 
