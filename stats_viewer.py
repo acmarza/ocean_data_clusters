@@ -163,6 +163,10 @@ class CorrelationViewer(MultiSliceViewer):
 
         self.update_evo_plot()
         self.update_corr_map()
+        self.update_corr_loc_marker()
+
+        # update figure
+        self.fig.canvas.draw()
 
     def update_evo_plot(self):
         # clear the evolution plot and draw R-age over time for new location
@@ -210,8 +214,6 @@ class CorrelationViewer(MultiSliceViewer):
                               )
         self.corr_ax_image.set_data(corr_map)
 
-        # update figure
-        self.fig.canvas.draw()
 
     def change_slice(self, dimension, amount):
         super().change_slice(dimension, amount)
