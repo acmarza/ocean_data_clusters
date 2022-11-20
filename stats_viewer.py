@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
 from matplotlib.gridspec import GridSpec
 from matplotlib.widgets import RadioButtons
 from scipy.cluster.hierarchy import linkage, fcluster
@@ -72,12 +74,12 @@ class CorrelationViewer(MultiSliceViewer):
             # if p-values not required, compute correlation with numpy
             # this is quick enough that there's no need to save to file
             corr_mat = np.corrcoef(evolutions)
+        self.corr_mat = corr_mat
 
         # some handy attributes
         self.time_steps, self.n_cols, self.n_rows = t, y, x
 
         # save correlation matrix as attribute and run clustering
-        self.corr_mat = corr_mat
         labels_shaped = self.corr_cluster()
 
         # call the init method of the MultiSliceViewer parent
@@ -109,27 +111,29 @@ class CorrelationViewer(MultiSliceViewer):
             self.linkage_method_radio_on_click
         )
 
-        # initialise correlation map with a gradient that
-        # spans the range of r values in the corelation matrix
-        dummy_corr_map = np.reshape(np.linspace(
-                start=np.nanmin(self.corr_mat),
-                stop=np.nanmax(self.corr_mat),
-                num=x*y,
-                endpoint=True
-            ), [x, y])
+        norm = Normalize(vmin=np.nanmin(self.corr_mat),
+                         vmax=np.nanmax(self.corr_mat)
+                         )
 
         self.corr_ax_image = self.corr_ax.imshow(
-            dummy_corr_map,
+            self.surface_slice[0],
             origin='lower',
+            norm=norm,
             cmap=cmap
         )
 
+        self.corr_loc = [int(x/2), int(y/2)]
+        self.update_evo_plot()
+        self.update_corr_map()
+        self.update_corr_loc_marker()
+
         # put a colorbar on the correlation map
-        self.fig.colorbar(self.corr_ax_image, ax=self.corr_ax)
+        self.fig.colorbar(ScalarMappable(norm=norm, cmap=cmap),
+                          ax=self.corr_ax,
+                          ticks=np.linspace(-1, 1, num=5, endpoint=True))
 
     def init_plots(self):
         # separate this call to plt.subplots for easy override in children
-        # in this case we want 4 plots (2x2+1)
         self.fig = plt.figure()
         gs = GridSpec(3, 4,
                       width_ratios=[1, 1, 0.5, 0.5],
@@ -157,30 +161,16 @@ class CorrelationViewer(MultiSliceViewer):
         # save last clicked point
         self.corr_loc = [x_pos, y_pos]
 
-        # translate x-y coords of click to index of grid point in flat array
-        flat_index = y_pos * self.n_rows + x_pos
+        self.update_evo_plot()
+        self.update_corr_map()
 
+    def update_evo_plot(self):
         # clear the evolution plot and draw R-age over time for new location
         self.evo_ax.clear()
+        x_pos, y_pos = self.corr_loc
         self.current_evo = self.surface_slice[:, y_pos, x_pos]
         self.evo_ax.plot(range(self.surface_slice.shape[0]),
                          self.current_evo)
-
-        # get the row in the correlation map corresponding
-        # to the clicked grid point
-        corr_array = self.corr_mat[flat_index]
-
-        # shape this row into a 2D array and plot
-        corr_map = np.reshape(corr_array,
-                              [self.n_rows, self.n_cols]
-                              )
-        self.corr_ax_image.set_data(corr_map)
-
-        # put a star on the location clicked by the user
-        self.update_corr_loc_marker()
-
-        # update figure
-        self.fig.canvas.draw()
 
     def update_corr_loc_marker(self):
         # clear previous marker if present
@@ -193,7 +183,7 @@ class CorrelationViewer(MultiSliceViewer):
         # add new star-shaped marker in clicked location
         try:
             x_pos, y_pos = self.corr_loc
-            self.helper_point = self.helper_ax.plot(
+            self.helper_point = self.corr_ax.plot(
                 x_pos,
                 y_pos,
                 color='black',
@@ -201,6 +191,27 @@ class CorrelationViewer(MultiSliceViewer):
             )
         except AttributeError:
             pass
+
+    def update_corr_map(self):
+
+        # save last clicked point
+        (x_pos, y_pos) = self.corr_loc
+
+        # translate x-y coords of click to index of grid point in flat array
+        flat_index = y_pos * self.n_rows + x_pos
+
+        # get the row in the correlation map corresponding
+        # to the clicked grid point
+        corr_array = self.corr_mat[flat_index]
+
+        # shape this row into a 2D array and plot
+        corr_map = np.reshape(corr_array,
+                              [self.n_rows, self.n_cols]
+                              )
+        self.corr_ax_image.set_data(corr_map)
+
+        # update figure
+        self.fig.canvas.draw()
 
     def change_slice(self, dimension, amount):
         super().change_slice(dimension, amount)
@@ -281,12 +292,17 @@ class CorrelationViewer(MultiSliceViewer):
         self.fig.canvas.draw()
 
     def enter_helper_ax_event(self, event):
-        if event.inaxes == self.helper_ax:
+        if event.inaxes == self.corr_ax:
             self.click_helper_ax_cid = self.fig.canvas.mpl_connect(
                 'button_press_event', self.process_click)
 
     def leave_helper_ax_event(self, event):
-        if event.inaxes == self.helper_ax:
+        if event.inaxes == self.corr_ax:
             self.fig.canvas.mpl_disconnect(
                 self.click_helper_ax_cid
             )
+
+
+# class CorrelationMatrixViewer:
+
+#    def __init__(self, corr_mat, corr_ax, cluster_ax, linkage_method_ax):
