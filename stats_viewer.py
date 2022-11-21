@@ -64,7 +64,7 @@ class CorrelationMatrixViewer:
     def init_linkage_method_radio_ax(self):
         # radio buttons for changing clustering method
         self.linkage_method_ax = self.fig.add_subplot(133)
-
+        self.linkage_method_ax.set_title('Linkage method')
         self.linkage_method_radio = RadioButtons(
             self.linkage_method_ax,
             ('single', 'complete', 'average', 'weighted', 'centroid',
