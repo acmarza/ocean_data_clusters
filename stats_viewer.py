@@ -26,15 +26,20 @@ class CorrelationMatrixViewer:
 
         self.fig = fig if fig else plt.figure()
 
+        self.linkage_method = 'complete'
+        self.fcluster_thresh = 0.4
+        self.fcluster_criterion = 'distance'
+
         self.init_corr_ax()
         self.init_cluster_ax()
         self.init_linkage_method_radio_ax()
+        self.init_fcluster_criterion_radio_ax()
 
         self.update_plots()
 
     def init_corr_ax(self):
 
-        self.corr_ax = self.fig.add_subplot(131)
+        self.corr_ax = self.fig.add_subplot(231)
 
         norm = Normalize(vmin=np.nanmin(self.corr_mat),
                          vmax=np.nanmax(self.corr_mat)
@@ -63,10 +68,10 @@ class CorrelationMatrixViewer:
 
     def init_linkage_method_radio_ax(self):
         # radio buttons for changing clustering method
-        self.linkage_method_ax = self.fig.add_subplot(133)
-        self.linkage_method_ax.set_title('Linkage method')
+        self.linkage_method_radio_ax = self.fig.add_subplot(234)
+        self.linkage_method_radio_ax.set_title('Linkage method')
         self.linkage_method_radio = RadioButtons(
-            self.linkage_method_ax,
+            self.linkage_method_radio_ax,
             ('single', 'complete', 'average', 'weighted', 'centroid',
              'median', 'ward'),
             active=1
@@ -76,8 +81,23 @@ class CorrelationMatrixViewer:
             self.linkage_method_radio_on_click
         )
 
+    def init_fcluster_criterion_radio_ax(self):
+        self.fcluster_criterion_radio_ax = self.fig.add_subplot(235)
+        self.fcluster_criterion_radio_ax.set_title('Fcluster criterion')
+
+        self.fcluster_criterion_radio = RadioButtons(
+            self.fcluster_criterion_radio_ax,
+            ('inconsistent', 'distance', 'maxclust', 'monocrit',
+             'maxclust_monocrit'),
+            active=1
+        )
+
+        self.fcluster_criterion_radio.on_clicked(
+            self.fcluster_criterion_radio_on_click
+        )
+
     def init_cluster_ax(self):
-        self.cluster_ax = self.fig.add_subplot(132)
+        self.cluster_ax = self.fig.add_subplot(232)
 
         labels_shaped = self.corr_cluster()
 
@@ -88,9 +108,7 @@ class CorrelationMatrixViewer:
             cmap=self.cmap
         )
 
-    def corr_cluster(self, linkage_method='complete', fcluster_thresh=0.4,
-                     fcluster_criterion='distance'):
-
+    def corr_cluster(self):
         # convert correlation matrix to pandas dataframe to drop nan rows/cols
         df = pd.DataFrame(self.corr_mat.data, index=None, columns=None)
         droppedna = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
@@ -115,13 +133,13 @@ class CorrelationMatrixViewer:
         square = squareform(dissimilarity)
 
         # perform hierarchical clustering
-        hierarchy = linkage(square, method=linkage_method)
+        hierarchy = linkage(square, method=self.linkage_method)
 
         # flatten the hierarchy into usable clusters
         # get the cluster label assigned to each grid point as a flat array
         labels = fcluster(hierarchy,
-                          fcluster_thresh,
-                          criterion=fcluster_criterion
+                          self.fcluster_thresh,
+                          criterion=self.fcluster_criterion
                           )
 
         # put the labels into the whole dataframe (skipping nan rows/columns)
@@ -197,10 +215,19 @@ class CorrelationMatrixViewer:
                               )
         self.corr_ax_image.set_data(corr_map)
 
-    def linkage_method_radio_on_click(self, label):
-        labels_shaped = self.corr_cluster(linkage_method=label)
+    def update_cluster_map(self):
+        labels_shaped = self.corr_cluster()
         self.cluster_ax_image.set_data(labels_shaped)
         self.fig.canvas.draw()
+
+    def linkage_method_radio_on_click(self, label):
+        print(label)
+        self.linkage_method = label
+        self.update_cluster_map()
+
+    def fcluster_criterion_radio_on_click(self, label):
+        self.fcluster_criterion = label
+        self.update_cluster_map()
 
     def enter_corr_ax_event(self, event):
         if event.inaxes == self.corr_ax:
@@ -301,7 +328,10 @@ class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
         self.helper_ax.set_position(gs[1].get_position(self.fig))
         self.corr_ax.set_position(gs[4].get_position(self.fig))
         self.cluster_ax.set_position(gs[5].get_position(self.fig))
-        self.linkage_method_ax.set_position(gs[6].get_position(self.fig))
+        self.linkage_method_radio_ax.set_position(gs[6].get_position(self.fig))
+        self.fcluster_criterion_radio_ax.set_position(
+            gs[7].get_position(self.fig)
+        )
         self.evo_ax.set_position(gs[8:].get_position(self.fig))
 
         # self.fig.set_constrained_layout(True)
