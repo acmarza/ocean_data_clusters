@@ -40,8 +40,10 @@ class CorrelationMatrixViewer:
                          )
 
         # put a colorbar on the correlation map
+        cax = self.corr_ax.inset_axes([1.04, 0, 0.05, 1])
         self.fig.colorbar(ScalarMappable(norm=norm, cmap=self.cmap),
                           ax=self.corr_ax,
+                          cax=cax,
                           ticks=np.linspace(-1, 1, num=5, endpoint=True)
                           )
 

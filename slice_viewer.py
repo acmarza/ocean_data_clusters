@@ -47,7 +47,8 @@ class MultiSliceViewer:
         )
 
         if colorbar:
-            self.fig.colorbar(self.main_ax_image, ax=self.main_ax)
+            cax = self.main_ax.inset_axes([1.04, 0, 0.05, 1])
+            self.fig.colorbar(self.main_ax_image, ax=self.main_ax, cax=cax)
 
         if legend:
             values = np.unique(self.volume.ravel())
