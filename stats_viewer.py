@@ -21,6 +21,7 @@ class CorrelationMatrixViewer:
 
         self.n_rows = n_rows
         self.n_cols = n_cols
+        self.corr_loc = [int(self.n_rows/2), int(self.n_cols/2)]
         self.cmap = cmap
 
         self.fig = fig if fig else plt.figure()
@@ -29,11 +30,11 @@ class CorrelationMatrixViewer:
         self.init_cluster_ax()
         self.init_linkage_method_radio_ax()
 
+        self.update_plots()
+
     def init_corr_ax(self):
 
         self.corr_ax = self.fig.add_subplot(131)
-
-        self.corr_loc = [int(self.n_rows/2), int(self.n_cols/2)]
 
         norm = Normalize(vmin=np.nanmin(self.corr_mat),
                          vmax=np.nanmax(self.corr_mat)
@@ -59,8 +60,6 @@ class CorrelationMatrixViewer:
             'axes_enter_event', self.enter_corr_ax_event)
         self.exit_corr_ax_cid = self.fig.canvas.mpl_connect(
             'axes_leave_event', self.leave_corr_ax_event)
-
-        self.update_corr_map()
 
     def init_linkage_method_radio_ax(self):
         # radio buttons for changing clustering method
