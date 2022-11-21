@@ -229,25 +229,25 @@ class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
 
         MultiSliceViewer.__init__(self, volume, title=title, colorbar=colorbar,
                                   legend=False, cmap=cmap, fig=self.fig)
-        t, _, y, x = self.volume.shape
-        # each row in evolutions is the R-age time series for a grid point
-        evolutions = np.reshape(self.surface_slices, [t, x*y]).T
 
-        corr_mat = self.get_corr_mat(evolutions, (x, y), pvalues,
+        corr_mat = self.get_corr_mat(pvalues,
                                      corr_mat_file=corr_mat_file,
                                      pval_mat_file=pval_mat_file
                                      )
 
+        _, _, y, x = self.volume.shape
         CorrelationMatrixViewer.__init__(self, corr_mat, x, y, fig=self.fig)
 
         self.layout_plots()
         self.update_evo_plot()
 
-    def get_corr_mat(self, evolutions, shape, pvalues=False,
+    def get_corr_mat(self, pvalues=False,
                      corr_mat_file="corr_mat.npy",
                      pval_mat_file="pval_mat.npy"):
 
-        x, y = shape
+        t, _, y, x = self.volume.shape
+        # each row in evolutions is the R-age time series for a grid point
+        evolutions = np.reshape(self.surface_slices, [t, x*y]).T
 
         # try reading correlation and p-value matrices from file
         if pvalues:
