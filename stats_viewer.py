@@ -93,7 +93,7 @@ class CorrelationMatrixViewer:
                      fcluster_criterion='distance'):
 
         # convert correlation matrix to pandas dataframe to drop nan rows/cols
-        df = pd.DataFrame(self.corr_mat, index=None, columns=None)
+        df = pd.DataFrame(self.corr_mat.data, index=None, columns=None)
         droppedna = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
 
         # form dataframe back into a correlation matrix (without nans)
@@ -289,7 +289,7 @@ class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
         else:
             # if p-values not required, compute correlation with numpy
             # this is quick enough that there's no need to save to file
-            corr_mat = np.corrcoef(evolutions)
+            corr_mat = np.ma.masked_array(np.corrcoef(evolutions))
 
         return corr_mat
 
