@@ -171,11 +171,14 @@ class CorrelationMatrixViewer:
         # save last clicked point
         self.corr_loc = [x_pos, y_pos]
 
-        self.update_corr_map()
-        self.update_corr_loc_marker()
+        self.update_plots()
 
         # update figure
         self.fig.canvas.draw()
+
+    def update_plots(self):
+        self.update_corr_map()
+        self.update_corr_loc_marker()
 
     def update_corr_map(self):
 
@@ -212,7 +215,7 @@ class CorrelationMatrixViewer:
             )
 
 
-class CorrelationViewer(MultiSliceViewer):
+class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
 
     def __init__(self, volume, title="Correlation Viewer",
                  colorbar=True,
@@ -240,10 +243,10 @@ class CorrelationViewer(MultiSliceViewer):
                                      pval_mat_file=pval_mat_file
                                      )
 
-        self.cmv = CorrelationMatrixViewer(corr_mat, x, y, fig=self.fig)
+        CorrelationMatrixViewer.__init__(self, corr_mat, x, y, fig=self.fig)
 
-        super().__init__(volume, title=title, colorbar=colorbar,
-                         legend=False, cmap=cmap, fig=self.fig)
+        MultiSliceViewer.__init__(self, volume, title=title, colorbar=colorbar,
+                                  legend=False, cmap=cmap, fig=self.fig)
         self.layout_plots()
         self.update_evo_plot()
 
@@ -304,9 +307,9 @@ class CorrelationViewer(MultiSliceViewer):
                       figure=self.fig)
         self.main_ax.set_position(gs[0].get_position(self.fig))
         self.helper_ax.set_position(gs[1].get_position(self.fig))
-        self.cmv.corr_ax.set_position(gs[4].get_position(self.fig))
-        self.cmv.cluster_ax.set_position(gs[5].get_position(self.fig))
-        self.cmv.linkage_method_ax.set_position(gs[6].get_position(self.fig))
+        self.corr_ax.set_position(gs[4].get_position(self.fig))
+        self.cluster_ax.set_position(gs[5].get_position(self.fig))
+        self.linkage_method_ax.set_position(gs[6].get_position(self.fig))
         self.evo_ax.set_position(gs[8:].get_position(self.fig))
 
         # self.fig.set_constrained_layout(True)
@@ -314,6 +317,10 @@ class CorrelationViewer(MultiSliceViewer):
     def change_slice(self, dimension, amount):
         super().change_slice(dimension, amount)
         self.update_evo_line()
+
+    def update_plots(self):
+        super().update_plots()
+        self.update_evo_plot()
 
     def update_evo_line(self):
         try:
@@ -335,9 +342,14 @@ class CorrelationViewer(MultiSliceViewer):
             pass
 
     def update_evo_plot(self):
+        print("in update evo plot")
         # clear the evolution plot and draw R-age over time for new location
         self.evo_ax.clear()
-        x_pos, y_pos = self.cmv.corr_loc
+        print("cleared evo ax")
+        x_pos, y_pos = self.corr_loc
+        print(f"clicked {x_pos}:{y_pos}")
         self.current_evo = self.surface_slice[:, y_pos, x_pos]
+        print(f"current evo shape: {self.current_evo.shape}")
         self.evo_ax.plot(range(self.surface_slice.shape[0]),
                          self.current_evo)
+        print("plotted")
