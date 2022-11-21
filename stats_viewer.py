@@ -223,20 +223,15 @@ class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
                  pval_mat_file='pval_mat.npy', pvalues=True):
 
         print("[i] Initialising CorrelationViewer")
-        try:
-            # assuming volume is 4D of shape (t, z, y,x), take surface slice
-            t, _, y, x = volume.shape
-            self.surface_slice = volume[:, 0, :, :]
-        except ValueError:
-            # assumption of 4D was wrong -> volume is already a surface slice
-            t, y, x = volume.shape
-            self.surface_slice = volume
 
         self.fig = plt.figure()
         self.evo_ax = self.fig.add_subplot()
 
+        MultiSliceViewer.__init__(self, volume, title=title, colorbar=colorbar,
+                                  legend=False, cmap=cmap, fig=self.fig)
+        t, _, y, x = self.volume.shape
         # each row in evolutions is the R-age time series for a grid point
-        evolutions = np.reshape(self.surface_slice, [t, x*y]).T
+        evolutions = np.reshape(self.surface_slices, [t, x*y]).T
 
         corr_mat = self.get_corr_mat(evolutions, (x, y), pvalues,
                                      corr_mat_file=corr_mat_file,
@@ -245,8 +240,6 @@ class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
 
         CorrelationMatrixViewer.__init__(self, corr_mat, x, y, fig=self.fig)
 
-        MultiSliceViewer.__init__(self, volume, title=title, colorbar=colorbar,
-                                  legend=False, cmap=cmap, fig=self.fig)
         self.layout_plots()
         self.update_evo_plot()
 
@@ -342,14 +335,9 @@ class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
             pass
 
     def update_evo_plot(self):
-        print("in update evo plot")
         # clear the evolution plot and draw R-age over time for new location
         self.evo_ax.clear()
-        print("cleared evo ax")
         x_pos, y_pos = self.corr_loc
-        print(f"clicked {x_pos}:{y_pos}")
-        self.current_evo = self.surface_slice[:, y_pos, x_pos]
-        print(f"current evo shape: {self.current_evo.shape}")
-        self.evo_ax.plot(range(self.surface_slice.shape[0]),
+        self.current_evo = self.surface_slices[:, y_pos, x_pos]
+        self.evo_ax.plot(range(self.surface_slices.shape[0]),
                          self.current_evo)
-        print("plotted")
