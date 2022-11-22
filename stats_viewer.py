@@ -236,7 +236,6 @@ class CorrelationMatrixViewer:
         self.fig.canvas.draw()
 
     def linkage_method_radio_on_click(self, label):
-        print(label)
         self.linkage_method = label
         self.update_cluster_map()
 
