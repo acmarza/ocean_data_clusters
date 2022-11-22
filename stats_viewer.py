@@ -5,7 +5,7 @@ import pandas as pd
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 from matplotlib.gridspec import GridSpec
-from matplotlib.widgets import RadioButtons
+from matplotlib.widgets import RadioButtons, TextBox
 from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.distance import squareform
 from scipy.stats.stats import pearsonr
@@ -34,6 +34,7 @@ class CorrelationMatrixViewer:
         self.init_cluster_ax()
         self.init_linkage_method_radio_ax()
         self.init_fcluster_criterion_radio_ax()
+        self.init_fcluster_thresh_textbox_ax()
 
         self.update_plots()
 
@@ -94,6 +95,20 @@ class CorrelationMatrixViewer:
 
         self.fcluster_criterion_radio.on_clicked(
             self.fcluster_criterion_radio_on_click
+        )
+
+    def init_fcluster_thresh_textbox_ax(self):
+        self.fcluster_thresh_textbox_ax = self.fig.add_subplot(236)
+        self.fcluster_thresh_textbox_ax.set_title("Fcluster threshold")
+
+        self.fcluster_thresh_textbox = TextBox(
+            ax=self.fcluster_thresh_textbox_ax,
+            label='value:',
+            initial='0.4'
+        )
+
+        self.fcluster_thresh_textbox.on_submit(
+            self.fcluster_thresh_textbox_on_submit
         )
 
     def init_cluster_ax(self):
@@ -229,6 +244,10 @@ class CorrelationMatrixViewer:
         self.fcluster_criterion = label
         self.update_cluster_map()
 
+    def fcluster_thresh_textbox_on_submit(self, value):
+        self.fcluster_thresh = value
+        self.update_cluster_map()
+
     def enter_corr_ax_event(self, event):
         if event.inaxes == self.corr_ax:
             self.click_corr_ax_cid = self.fig.canvas.mpl_connect(
@@ -326,6 +345,8 @@ class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
                       figure=self.fig)
         self.main_ax.set_position(gs[0].get_position(self.fig))
         self.helper_ax.set_position(gs[1].get_position(self.fig))
+        self.fcluster_thresh_textbox_ax.set_position(
+            gs[2].get_position(self.fig))
         self.corr_ax.set_position(gs[4].get_position(self.fig))
         self.cluster_ax.set_position(gs[5].get_position(self.fig))
         self.linkage_method_radio_ax.set_position(gs[6].get_position(self.fig))
