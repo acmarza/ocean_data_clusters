@@ -166,7 +166,7 @@ class MultiSliceViewer:
         try:
             for handle in self.helper_line:
                 handle.remove()
-        except AttributeError:
+        except (AttributeError, ValueError):
             pass
 
         if(self.view != 'z'):
