@@ -30,7 +30,6 @@ class CorrelationMatrixViewer:
 
         # initialise a bunch of plots and widgets
         self.init_corr_ax()
-        self.init_cluster_ax()
         self.init_linkage_method_radio_ax()
         self.init_fcluster_criterion_radio_ax()
         self.init_fcluster_thresh_textbox_ax()
@@ -40,6 +39,10 @@ class CorrelationMatrixViewer:
         self.linkage_method = self.linkage_method_radio.value_selected
         self.fcluster_criterion = self.fcluster_criterion_radio.value_selected
         self.fcluster_thresh = self.fcluster_thresh_textbox.text
+
+        # with the above can now perform correlation clustering
+        # and initialise the correlation map
+        self.init_cluster_ax()
 
         # refresh stuff
         self.update_plots()
@@ -297,35 +300,47 @@ class CorrelationMatrixViewer:
 
 class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
 
-    def __init__(self, volume, title="Correlation Viewer",
-                 colorbar=True,
+    def __init__(self, volume, title="Correlation Viewer", colorbar=True,
                  cmap='rainbow', corr_mat_file='corr_mat.npy',
                  pval_mat_file='pval_mat.npy', pvalues=True):
 
         print("[i] Initialising CorrelationViewer")
 
+        # create a new figure
         self.fig = plt.figure()
+        # only the evolution plot is new, the rest are inherited
         self.evo_ax = self.fig.add_subplot()
 
+        # call init of MultiSliceViewer parent, passing it the child's fig
         MultiSliceViewer.__init__(self, volume, title=title, colorbar=colorbar,
                                   legend=False, cmap=cmap, fig=self.fig)
 
+        # obtain the correlation matrix
         corr_mat = self.get_corr_mat(pvalues,
                                      corr_mat_file=corr_mat_file,
                                      pval_mat_file=pval_mat_file
                                      )
 
+        # still assuming data shape is t, z, y, x
         _, _, y, x = self.volume.shape
+
+        # call init of CorrelationMatrixViewer parent,
+        # passing it the child's fig
         CorrelationMatrixViewer.__init__(self, corr_mat, x, y, fig=self.fig)
 
+        # arrange the plot to fit on screen
         self.layout_plots()
+
+        # only plot left to refresh, since other were handled by parents' init
         self.update_evo_plot()
 
     def get_corr_mat(self, pvalues=False,
                      corr_mat_file="corr_mat.npy",
                      pval_mat_file="pval_mat.npy"):
 
+        # shorthand names for data dimensions
         t, _, y, x = self.volume.shape
+
         # each row in evolutions is the R-age time series for a grid point
         evolutions = np.reshape(self.surface_slices, [t, x*y]).T
 
@@ -336,12 +351,15 @@ class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
                 print(f"[i] Read in {pval_mat_file}")
                 corr_mat = np.load(corr_mat_file)
                 print(f"[i] Read in {corr_mat_file}")
+
             # compute correlation now if not read from file
             except FileNotFoundError:
+
                 # for p-values use pearson's r
                 # initialise empty matrices to hold corr coefs and p-value
                 pval_mat = np.empty([y*x, y*x])
                 corr_mat = np.empty([y*x, y*x])
+
                 # run Pearson's r for every possible pair of grid points
                 for i, evo1 in enumerate(tqdm(evolutions,
                                               desc="[i] Computing Pearson's r \
@@ -349,23 +367,27 @@ class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
                     # skip grid points missing data
                     if np.isnan(evo1).any():
                         continue
-                    for j, evo2 in enumerate(
-                        tqdm(evolutions, leave=False)
-                    ):
+
+                    for j, evo2 in enumerate(tqdm(evolutions, leave=False)):
+
                         # skip grid points missing data
                         if np.isnan(evo2).any():
                             continue
+
                         # compute pearson's r and p-value and put in matrix
                         corr_coef, pval = pearsonr(evo1, evo2)
                         corr_mat[i, j] = corr_coef
                         pval_mat[i, j] = pval
+
                 # save correlation analysis results to file
                 np.save(pval_mat_file, pval_mat)
                 np.save(corr_mat_file, corr_mat)
+
             # mask grid point where correlation not statistically significant
             pval_mask = (pval_mat > 0.05)
             corr_mat = np.ma.masked_array(corr_mat, mask=pval_mask,
                                           fill_value=np.nan)
+
         else:
             # if p-values not required, compute correlation with numpy
             # this is quick enough that there's no need to save to file
@@ -374,10 +396,14 @@ class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
         return corr_mat
 
     def layout_plots(self):
+
+        # create GridSpec object with 3 rows and 4 columns
         gs = GridSpec(3, 4,
                       width_ratios=[1, 1, 0.5, 0.5],
                       height_ratios=[1, 1, 0.5],
                       figure=self.fig)
+
+        # assign each ax a cell (or more) on the grid
         self.main_ax.set_position(gs[0].get_position(self.fig))
         self.helper_ax.set_position(gs[1].get_position(self.fig))
         self.fcluster_thresh_textbox_ax.set_position(
@@ -393,19 +419,26 @@ class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
         # self.fig.set_constrained_layout(True)
 
     def change_slice(self, dimension, amount):
+        # override MultiSliceViewer's change_slice method
+        # to also update the time slice locator line on the evo plot
         super().change_slice(dimension, amount)
         self.update_evo_line()
 
     def update_plots(self):
+        # override CorrelationMatrixViewer's update_plots  method
+        # to also update the evo plot
         super().update_plots()
         self.update_evo_plot()
 
     def update_evo_line(self):
+        # remove previous time slice locator line if exists
         try:
             for handle in self.evo_line:
                 handle.remove()
         except AttributeError:
             pass
+
+        # put new evo line based on current time slice
         try:
             evo_line_x = [self.index[0], self.index[0]]
             evo_line_y = [np.min(self.current_evo),
@@ -420,9 +453,15 @@ class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
             pass
 
     def update_evo_plot(self):
-        # clear the evolution plot and draw R-age over time for new location
+        # clear the evolution plot to draw R-age over time for new location
         self.evo_ax.clear()
+
+        # unpack xy coords where user last clicked
         x_pos, y_pos = self.corr_loc
+
+        # update attribute for future reference
         self.current_evo = self.surface_slices[:, y_pos, x_pos]
+
+        # plot the new time series
         self.evo_ax.plot(range(self.surface_slices.shape[0]),
                          self.current_evo)
