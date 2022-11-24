@@ -16,37 +16,46 @@ from tqdm import tqdm
 class CorrelationMatrixViewer:
 
     def __init__(self, corr_mat, n_rows, n_cols, fig=None, cmap='rainbow'):
-
+        # initialise class attributes for future reference
         self.corr_mat = corr_mat
-
         self.n_rows = n_rows
         self.n_cols = n_cols
-        self.corr_loc = [int(self.n_rows/2), int(self.n_cols/2)]
         self.cmap = cmap
 
+        # default the location to analyse to the middle of the map
+        self.corr_loc = [int(self.n_rows/2), int(self.n_cols/2)]
+
+        # create a new figure or use an existing one if supplied
         self.fig = fig if fig else plt.figure()
 
-        self.linkage_method = 'complete'
-        self.fcluster_thresh = 0.4
-        self.fcluster_criterion = 'distance'
-
+        # initialise a bunch of plots and widgets
         self.init_corr_ax()
         self.init_cluster_ax()
         self.init_linkage_method_radio_ax()
         self.init_fcluster_criterion_radio_ax()
         self.init_fcluster_thresh_textbox_ax()
 
+        # set more class attributes from the values of widgets
+        # like multiple selection and text input
+        self.linkage_method = self.linkage_method_radio.value_selected
+        self.fcluster_criterion = self.fcluster_criterion_radio.value_selected
+        self.fcluster_thresh = self.fcluster_thresh_textbox.text
+
+        # refresh stuff
         self.update_plots()
 
     def init_corr_ax(self):
 
+        # initialise the plot that shows correlation map for clicked point
         self.corr_ax = self.fig.add_subplot(231)
 
+        # trick to ensure colorbar spands the range of valuese present in the
+        # correlation matrix
         norm = Normalize(vmin=np.nanmin(self.corr_mat),
                          vmax=np.nanmax(self.corr_mat)
                          )
 
-        # put a colorbar on the correlation map
+        # put the colorbar inside inset axes by the correlation map
         cax = self.corr_ax.inset_axes([1.04, 0, 0.05, 1])
         self.fig.colorbar(ScalarMappable(norm=norm, cmap=self.cmap),
                           ax=self.corr_ax,
@@ -54,6 +63,8 @@ class CorrelationMatrixViewer:
                           ticks=np.linspace(-1, 1, num=5, endpoint=True)
                           )
 
+        # initialise the correlation map with zeroes in the expected map shape
+        # values don't matter because we'll call update_corr_map()
         self.corr_ax_image = self.corr_ax.imshow(
             np.zeros([self.n_rows, self.n_cols]),
             origin='lower',
@@ -69,8 +80,11 @@ class CorrelationMatrixViewer:
 
     def init_linkage_method_radio_ax(self):
         # radio buttons for changing clustering method
+        # create a new ax and set its title
         self.linkage_method_radio_ax = self.fig.add_subplot(234)
         self.linkage_method_radio_ax.set_title('Linkage method')
+
+        # create the radio button with predefined labels
         self.linkage_method_radio = RadioButtons(
             self.linkage_method_radio_ax,
             ('single', 'complete', 'average', 'weighted', 'centroid',
@@ -78,11 +92,13 @@ class CorrelationMatrixViewer:
             active=1
         )
 
+        # set the radio button to call this function when clicked
         self.linkage_method_radio.on_clicked(
             self.linkage_method_radio_on_click
         )
 
     def init_fcluster_criterion_radio_ax(self):
+        # see init_linkage_method_radio_ax comments
         self.fcluster_criterion_radio_ax = self.fig.add_subplot(235)
         self.fcluster_criterion_radio_ax.set_title('Fcluster criterion')
 
@@ -98,22 +114,27 @@ class CorrelationMatrixViewer:
         )
 
     def init_fcluster_thresh_textbox_ax(self):
+        # create an ax and give it a title
         self.fcluster_thresh_textbox_ax = self.fig.add_subplot(236)
         self.fcluster_thresh_textbox_ax.set_title("Fcluster threshold")
 
+        # create the textbox giving it an initial value
         self.fcluster_thresh_textbox = TextBox(
             ax=self.fcluster_thresh_textbox_ax,
             label='value:',
             initial='0.4'
         )
 
+        # tell the textbox to call this function when new text is submitted
         self.fcluster_thresh_textbox.on_submit(
             self.fcluster_thresh_textbox_on_submit
         )
 
     def init_cluster_ax(self):
+        # create new ax for the cluster map
         self.cluster_ax = self.fig.add_subplot(232)
 
+        # run correlation clustering to get the 2D array of labels
         labels_shaped = self.corr_cluster()
 
         # map out clusters
@@ -134,12 +155,13 @@ class CorrelationMatrixViewer:
 
         # corrections to reduce floating point errors
         corr = (corr + corr.T) / 2
-        np.fill_diagonal(corr, 1)
+        # np.fill_diagonal(corr, 1)
 
         # convert the correlation coefficients (higher is closer)
         # into distances (lower is closer)
         dissimilarity = 1 - corr
 
+        # corrections to reduce floating point errors
         dissimilarity = (dissimilarity + dissimilarity.T) / 2
         np.fill_diagonal(dissimilarity, 0)
 
@@ -151,13 +173,12 @@ class CorrelationMatrixViewer:
         hierarchy = linkage(square, method=self.linkage_method)
 
         # flatten the hierarchy into usable clusters
-        # get the cluster label assigned to each grid point as a flat array
         labels = fcluster(hierarchy,
                           self.fcluster_thresh,
                           criterion=self.fcluster_criterion
                           )
 
-        # put the labels into the whole dataframe (skipping nan rows/columns)
+        # put the labels into the original dataframe that includes nans
         df.loc[
                 df.index.isin(droppedna.index),
                 'labels'
@@ -203,9 +224,10 @@ class CorrelationMatrixViewer:
         # save last clicked point
         self.corr_loc = [x_pos, y_pos]
 
+        # update plots based on new location to be analysed
         self.update_plots()
 
-        # update figure
+        # refresh figure
         self.fig.canvas.draw()
 
     def update_plots(self):
@@ -214,14 +236,13 @@ class CorrelationMatrixViewer:
 
     def update_corr_map(self):
 
-        # save last clicked point
+        # unpack coords of last clicked point
         (x_pos, y_pos) = self.corr_loc
 
         # translate x-y coords of click to index of grid point in flat array
         flat_index = y_pos * self.n_rows + x_pos
 
-        # get the row in the correlation map corresponding
-        # to the clicked grid point
+        # get the corresponding row in the correlation map
         corr_array = self.corr_mat[flat_index]
 
         # shape this row into a 2D array and plot
@@ -231,29 +252,44 @@ class CorrelationMatrixViewer:
         self.corr_ax_image.set_data(corr_map)
 
     def update_cluster_map(self):
+        # re-run correlation clustering and get the labels 2D array
         labels_shaped = self.corr_cluster()
+
+        # set the labels as the cluster plot image
         self.cluster_ax_image.set_data(labels_shaped)
+
+        # refresh canvas
         self.fig.canvas.draw()
 
     def linkage_method_radio_on_click(self, label):
+        # update class attribute based on newly selected label in radio
         self.linkage_method = label
+        # map will update itself using the new linkage method
         self.update_cluster_map()
 
     def fcluster_criterion_radio_on_click(self, label):
+        # update class attribute based on newly selected label in radio
         self.fcluster_criterion = label
+        # map will update itself using the new fcluster criterion
         self.update_cluster_map()
 
     def fcluster_thresh_textbox_on_submit(self, value):
+        # update class attribute based on newly input text
         self.fcluster_thresh = value
+        # map will update itself using the new fcluster threshold
         self.update_cluster_map()
 
     def enter_corr_ax_event(self, event):
+        # check whether the entered ax is the correlation map
         if event.inaxes == self.corr_ax:
+            # if so, listen for clicks
             self.click_corr_ax_cid = self.fig.canvas.mpl_connect(
                 'button_press_event', self.process_corr_ax_click)
 
     def leave_corr_ax_event(self, event):
+        # check whether the exited ax is the correlation map
         if event.inaxes == self.corr_ax:
+            # if so, stop listening for clicks
             self.fig.canvas.mpl_disconnect(
                 self.click_corr_ax_cid
             )
