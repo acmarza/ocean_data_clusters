@@ -46,6 +46,7 @@ except (NameError, KeyError):
     print("[!] Name of the Delta14Carbon variable was not provided")
     dc14_var_name = input("[>] Enter Delta14Carbon variable name \
                           as it appears in the dataset: ")
+
 # rename Delta14C variable to dc14 for easy reference
 ds.rename({dc14_var_name: 'dc14'})
 print(f"[i] Renamed variable {dc14_var_name} to dc14")
@@ -98,6 +99,7 @@ if plot_all_evo:
     plt.title('age over time')
     all_evo_fig.show()
 
+# find out whether to run timeseries clustering, from config or interactively
 try:
     run_ts = config['timeseries'].getboolean('run')
 except (KeyError, NameError):
@@ -106,7 +108,7 @@ except (KeyError, NameError):
     run_ts = (yn == 'y')
 
 if run_ts:
-    # convert array of time series to pandas dataframe to drop NaN entries
+    # convert array of time series to pandas dataframe to drop NaN entries,
     # then back to array, then to time series dataset for use with tslearn
     df = pd.DataFrame(evolutions)
     evolutions = np.array(df.dropna())
@@ -143,6 +145,7 @@ if run_ts:
         km = TimeSeriesKMeans(n_clusters=n_clusters, metric="euclidean",
                               max_iter=10, n_jobs=-1)
         print("[i] Fitting k-means model, please stand by...")
+
         # actually fit the model
         km.fit(ts)
 
@@ -152,18 +155,30 @@ if run_ts:
         print(f"[i] Saved model to {pickle_file}")
 
     # get predictions for our timeseries from trained model
+    # i.e. to which cluster each timeseries belongs
     y_pred = km.predict(ts)
 
     # plot each cluster members and their barycenter
+    # initialise figure
     clusters_fig = plt.figure()
+
+    # for each cluster/label
     for yi in range(n_clusters):
+        # create a subplot in a table with n_cluster rows and 1 column
+        # this subplot is number yi+1 because we're counting from 0
         plt.subplot(n_clusters, 1, yi + 1)
+        # for every timeseries in the dataset that has been assigned label yi
         for xx in ts[y_pred == yi]:
+            # plot with a thin transparent line
             plt.plot(xx.ravel(), "k-", alpha=.2)
+        # plot the cluster barycenter
         plt.plot(km.cluster_centers_[yi].ravel(), "r-")
+        # label the cluster
         plt.text(0.55, 0.85, 'Cluster %d' % (yi + 1),
                  transform=plt.gca().transAxes)
+    # add a title at the top of the figure
     clusters_fig.suptitle("k-means results")
+    # finally show the figure
     clusters_fig.show()
 
     # assign predicted labels to the original dataframe
@@ -180,7 +195,8 @@ if run_ts:
     plt.imshow(labels_shaped, origin='lower')
     plt.show()
 
-
+# find out whether to cluster based on correlation matrix, from config or
+# interactively
 try:
     run_corr = config['correlation'].getboolean('run')
 except (KeyError, NameError):
@@ -189,8 +205,7 @@ except (KeyError, NameError):
     run_corr = (yn == 'y')
 
 if run_corr:
-
-    # find out from config or interactively whether to mask using p-values
+    # find out whether to mask using p-values, from config or interactively
     try:
         pvalues = config['correlation'].getboolean('pvalues')
     except (NameError, KeyError):
@@ -198,10 +213,13 @@ if run_corr:
                 ( p > 0.05 ) correlation? (y/n): ")
         pvalues = (yn == 'y')
 
-    # if taking into account p-values, will use the slower scipy pearsonr
-    # so it's better to work with save files
+    # define keyword arguments for CorrelationViewer
     kwargs = {'pvalues': pvalues}
+
     if pvalues:
+        # if taking into account p-values, will use the slower scipy pearsonr
+        # so it's better to work with save files
+        # their names are read from config or user input
         try:
             corr_mat_file = config['correlation']['corr_mat_file']
         except (KeyError, NameError):
@@ -216,9 +234,10 @@ if run_corr:
             pval_mat_file = input(
                 "[>] Enter file path to save/read p-value matrix now: "
             )
+        # add the save file paths to keyword arguments for CorrelationViewer
         kwargs['corr_mat_file'] = corr_mat_file
         kwargs['pval_mat_file'] = pval_mat_file
 
-    # visualize
+    # finally invoke CorrelationViewer and visualise
     viewer = CorrelationViewer(age_array, title="R-ages", **kwargs)
     plt.show()
