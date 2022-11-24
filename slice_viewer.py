@@ -186,7 +186,7 @@ class MultiSliceViewer:
         try:
             for handle in self.helper_line:
                 handle.remove()
-        except AttributeError:
+        except (AttributeError, ValueError):
             pass
 
         # slice locator in current implementation only makes sense for x/y view
