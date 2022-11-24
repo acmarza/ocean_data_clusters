@@ -258,6 +258,13 @@ class CorrelationMatrixViewer:
         # re-run correlation clustering and get the labels 2D array
         labels_shaped = self.corr_cluster()
 
+        # compute and set a new norm based on the new labels
+        # this ensures the colors are re-assigned to accommodate more clusters
+        labels_min = np.nanmin(labels_shaped)
+        labels_max = np.nanmax(labels_shaped)
+        norm = Normalize(vmin=labels_min, vmax=labels_max)
+        self.cluster_ax_image.set(norm=norm, cmap=self.cmap)
+
         # set the labels as the cluster plot image
         self.cluster_ax_image.set_data(labels_shaped)
 
