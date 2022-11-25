@@ -77,12 +77,18 @@ except KeyError:
                 # get the data as an array
                 var_to_plot = nc_data[string_var_to_plot]
                 data_to_plot = var_to_plot.__array__()
-                # view over time and depth
-                plot_title = string_var_to_plot + " ("\
-                    + var_to_plot.long_name + ") " + var_to_plot.units
+
+                # add more info in plot title if possible
+                try:
+                    plot_title = string_var_to_plot + " ("\
+                        + var_to_plot.long_name + ") " + var_to_plot.units
+                except AttributeError:
+                    plot_title = string_var_to_plot
+
                 MultiSliceViewer(data_to_plot, plot_title).show()
+
             except IndexError:
-                print("[!] {string_var_to_plot} not found; check spelling")
+                print(f"[!] {string_var_to_plot} not found; check spelling")
     except KeyboardInterrupt:
         # the user is done viewing plots, continue to kmeans routine
         pass
@@ -235,8 +241,10 @@ else:
     pipe.fit(features)
     labels = kmeans.labels_
     labels += 1
+
     # to get consistent colors for the next plots
-    palette = 'tab10'
+    # palette = 'tab10'
+    palette = 'rainbow'
     cmap = cm.get_cmap(palette)
     labels_colors = cmap(np.linspace(0, 1, num=n_clusters))
 
