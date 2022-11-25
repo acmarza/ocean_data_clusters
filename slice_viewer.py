@@ -2,6 +2,8 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 
+from matplotlib.colors import Normalize
+
 
 class MultiSliceViewer:
 
@@ -18,6 +20,10 @@ class MultiSliceViewer:
         self.surface_slices = volume[:, 0]
         self.index = [0, 0]
         self.cmap = cmap
+
+        # debug
+        self.norm = Normalize(vmin=np.nanmin(self.volume),
+                         vmax=np.nanmax(self.volume))
 
         # the viewer can create a new figure or use an already existing figure
         self.fig = fig if fig else plt.figure()
@@ -47,6 +53,7 @@ class MultiSliceViewer:
                 self.index[1]
             ],
             cmap=self.cmap,
+            norm=self.norm,
             origin='lower'
         )
 
@@ -86,6 +93,7 @@ class MultiSliceViewer:
             self.surface_slices[self.index[0]],
             origin='lower',
             cmap=self.cmap,
+            norm=self.norm
         )
 
     def show(self):

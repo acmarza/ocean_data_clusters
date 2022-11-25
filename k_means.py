@@ -243,8 +243,8 @@ else:
     labels += 1
 
     # to get consistent colors for the next plots
-    # palette = 'tab10'
-    palette = 'rainbow'
+    palette = 'tab10'
+    # palette = 'rainbow'
     cmap = cm.get_cmap(palette)
     labels_colors = cmap(np.linspace(0, 1, num=n_clusters))
 
