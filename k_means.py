@@ -205,7 +205,7 @@ class KMeansWorkflow:
 
         # run k-means with increasing number of clusters
         for i in tqdm(range(2, max_clusters),
-                      desc='number of clusters: '):
+                      desc='k-means run: '):
             # set the number of clusters for kmeans
             pipe['clusterer']['kmeans'].n_clusters = i
 
@@ -242,12 +242,13 @@ class KMeansWorkflow:
         plt.show()
 
     def get_metrics_mode_bool(self):
-        try:
-            metrics_mode = self.config['k-means'].getboolean('metrics_mode')
-        except (KeyError, ValueError):
+
+        metrics_mode = self.config['k-means'].getboolean('metrics_mode')
+        if metrics_mode is None:
             print("[!] You have not specified whether to run in metrics mode")
-            yn = input("[>] Evaluate clustering metrics?")
+            yn = input("[>] Evaluate clustering metrics? (y/n): ")
             metrics_mode = (yn == 'y')
+        print(metrics_mode)
         return metrics_mode
 
     def get_n_clusters(self):
