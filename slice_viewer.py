@@ -21,9 +21,10 @@ class MultiSliceViewer:
         self.index = [0, 0]
         self.cmap = cmap
 
-        # debug
-        self.norm = Normalize(vmin=np.nanmin(self.volume),
-                         vmax=np.nanmax(self.volume))
+        # ensure colors span whole data range, not just initial slice
+        self.norm = Normalize(
+            vmin=np.nanmin(self.volume), vmax=np.nanmax(self.volume)
+        )
 
         # the viewer can create a new figure or use an already existing figure
         self.fig = fig if fig else plt.figure()
