@@ -12,9 +12,8 @@ import numpy as np
 import pandas as pd
 
 from sklearn.cluster import KMeans
-from sklearn.metrics import calinski_harabasz_score,\
-                            davies_bouldin_score,\
-                            silhouette_score
+from sklearn.metrics import calinski_harabasz_score, davies_bouldin_score
+#                            silhouette_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
@@ -57,28 +56,28 @@ class KMeansWorkflow:
 
     def run_kmeans(self):
         pipe = self.construct_pipeline()
-        features, df, shape_original = self.construct_features()
+        self.construct_features()
         n_clusters = self.get_n_clusters()
 
         kmeans = pipe['clusterer']['kmeans']
         kmeans.n_clusters = n_clusters
         print("[i] Running k-means, please stand by...")
-        pipe.fit(features)
-        labels = kmeans.labels_
-        labels += 1
+        pipe.fit(self.features)
+        self.labels = kmeans.labels_
+        self.labels += 1
 
         # now to reshape the 1D array of labels into a plottable 2D form
         # first add the labels as a new column  to our pandas dataframe
-        df.loc[
-            df.index.isin(df.dropna().index),
+        self.df.loc[
+            self.df.index.isin(self.df.dropna().index),
             'labels'
-        ] = labels
+        ] = self.labels
 
         # then retrieve the labels column including missing vals as a 1D array
-        labels_flat = np.ma.masked_array(df['labels'])
+        labels_flat = np.ma.masked_array(self.df['labels'])
 
         # then reshape to the original 3D/fD form
-        labels_shaped = np.reshape(labels_flat, shape_original)
+        labels_shaped = np.reshape(labels_flat, self.shape_original)
 
         # map out the clusters each with its own color
         plot_title = f"Kmeans results with {n_clusters} clusters"
@@ -289,7 +288,7 @@ class KMeansWorkflow:
                                     for var in selected_vars]
 
         # take note of the original array shapes before flattening
-        shape_original = selected_vars_arrays[0].shape
+        self.shape_original = selected_vars_arrays[0].shape
 
         selected_vars_flat = [array.flatten()
                               for array in selected_vars_arrays]
@@ -298,11 +297,9 @@ class KMeansWorkflow:
         features = np.ma.masked_array(selected_vars_flat).T
 
         # convert to pandas dataframe to drop NaN entries, and back to array
-        df = pd.DataFrame(features)
-        df.columns = selected_vars
-        features = np.array(df.dropna())
-
-        return (features, df, shape_original)
+        self.df = pd.DataFrame(features)
+        self.df.columns = selected_vars
+        self.features = np.array(self.df.dropna())
 
 
 # parse commandline arguments
@@ -313,6 +310,13 @@ args = parser.parse_args()
 
 km_workflow = KMeansWorkflow(args.config)
 km_workflow.run()
+
+labels = km_workflow.labels
+df = km_workflow.df.dropna()
+
+plt.figure()
+plt.scatter(df['LOCAL_AGE'], df['o2'], c=labels, marker=',')
+plt.show()
 
 
 # labels_colors = cmap(np.linspace(0, 1, num=n_clusters))
