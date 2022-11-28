@@ -9,7 +9,7 @@ from matplotlib.widgets import RadioButtons, TextBox
 from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.distance import squareform
 from scipy.stats.stats import pearsonr
-from slice_viewer import MultiSliceViewer
+from nccluster.multisliceviewer import MultiSliceViewer
 from tqdm import tqdm
 
 

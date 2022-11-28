@@ -7,10 +7,11 @@ import pandas as pd
 import pickle
 
 from math import log
-from stats_viewer import CorrelationViewer
 from tqdm import tqdm
 from tslearn.clustering import TimeSeriesKMeans
 from tslearn.utils import to_time_series_dataset
+
+from nccluster.corrviewer import CorrelationViewer
 
 print("[i] Starting R-ages analysis workflow")
 

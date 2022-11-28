@@ -18,7 +18,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
 
-from slice_viewer import MultiSliceViewer
+from nccluster.multisliceviewer import MultiSliceViewer
 
 
 class KMeansWorkflow:
