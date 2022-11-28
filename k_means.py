@@ -191,7 +191,7 @@ class KMeansWorkflow:
     def run_metrics(self):
 
         pipe = self.construct_pipeline()
-        features, _, _ = self.construct_features()
+        self.construct_features()
         max_clusters = self.get_max_clusters()
 
         # iterate over different cluster sizes to find "optimal" k
@@ -209,10 +209,10 @@ class KMeansWorkflow:
             pipe['clusterer']['kmeans'].n_clusters = i
 
             # actually run kmeans
-            pipe.fit(features)
+            pipe.fit(self.features)
 
             # handy variables for computing scores
-            scaled_features = pipe['preprocessor'].transform(features)
+            scaled_features = pipe['preprocessor'].transform(self.features)
             labels = pipe['clusterer']['kmeans'].labels_
 
             # compute various scores for current k
