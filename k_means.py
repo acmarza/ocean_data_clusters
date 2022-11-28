@@ -199,7 +199,7 @@ class KMeansWorkflow:
         print("[i] Now computing clustering metrics")
         # initialise empty arrrays for our four tests in search of optimal k
         sse = []
-        silhouettes = []
+        # silhouettes = []
         calinski_harabasz = []
         davies_bouldin = []
 
@@ -218,7 +218,7 @@ class KMeansWorkflow:
 
             # compute various scores for current k
             sse.append(pipe['clusterer']['kmeans'].inertia_)
-            silhouettes.append(silhouette_score(scaled_features, labels))
+            # silhouettes.append(silhouette_score(scaled_features, labels))
             calinski_harabasz.append(
                 calinski_harabasz_score(scaled_features, labels))
             davies_bouldin.append(
@@ -230,8 +230,8 @@ class KMeansWorkflow:
         ax1.scatter(range(2, max_clusters), sse)
         ax1.title.set_text('Sum of squared errors, choose elbow point')
 
-        ax2.scatter(range(2, max_clusters), silhouettes)
-        ax2.title.set_text('Silhouette Score, higher is better')
+        # ax2.scatter(range(2, max_clusters), silhouettes)
+        # ax2.title.set_text('Silhouette Score, higher is better')
 
         ax3.scatter(range(2, max_clusters), calinski_harabasz)
         ax3.title.set_text('Calinski-Harabasz Index, higher is better')
