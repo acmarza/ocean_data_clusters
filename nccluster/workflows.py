@@ -1,8 +1,3 @@
-# multi slice viewer adapted from
-# https://www.datacamp.com/tutorial/matplotlib-3d-volumetric-data
-
-# kmeans pipeline based on
-# https://realpython.com/k-means-clustering-python/
 import configparser
 # import matplotlib.cm as cm
 import matplotlib.pyplot as plt
@@ -77,6 +72,16 @@ class RadioCarbonWorkflow(Workflow):
         except (NameError, KeyError):
             print("[!] Name of the Delta14Carbon variable was not provided")
             self.dc14_var_name = input("[>] Enter Delta14Carbon variable name \
+                                       as it appears in the dataset: ")
+
+    def get_di14c_var_name(self):
+        # get the name of the DI14C variable in dataset
+        # from config or interactively
+        try:
+            self.di14c_var_name = self.config['radiocarbon']['di14c']
+        except (NameError, KeyError):
+            print("[!] Name of the DI14C variable was not provided")
+            self.di14c_var_name = input("[>] Enter DI14C variable name \
                                        as it appears in the dataset: ")
 
     def rename_dc14_variable(self):
