@@ -10,6 +10,7 @@ import nctoolkit as nc
 import numpy as np
 import pandas as pd
 
+from math import log
 from sklearn.cluster import KMeans
 from sklearn.metrics import calinski_harabasz_score, davies_bouldin_score
 #                            silhouette_score
@@ -58,6 +59,47 @@ class Workflow:
 
     def preprocess_ds(self):
         print("[i] Preprocessing data")
+
+
+class RadioCarbonWorkflow(Workflow):
+
+    def preprocess_ds(self):
+        self.get_dc14_var_name()
+        self.rename_dc14_variable()
+        self.get_mean_radiocarbon_lifetime()
+        self.compute_local_age()
+
+    def get_dc14_var_name(self):
+        # get the name of the Delta14C variable in dataset
+        # from config or interactively
+        try:
+            self.dc14_var_name = self.config['radiocarbon']['dc14']
+        except (NameError, KeyError):
+            print("[!] Name of the Delta14Carbon variable was not provided")
+            self.dc14_var_name = input("[>] Enter Delta14Carbon variable name \
+                                       as it appears in the dataset: ")
+
+    def rename_dc14_variable(self):
+        # rename Delta14C variable to dc14 for easy reference
+        self.ds.rename({self.dc14_var_name: 'dc14'})
+        print(f"[i] Renamed variable {self.dc14_var_name} to dc14")
+
+    def get_mean_radiocarbon_lifetime(self):
+        # get the mean radiocarbon lifetime from config or interactively
+        try:
+            mean_radio_life =\
+                int(self.config['radiocarbon']['mean_radiocarbon_lifetime'])
+        except (NameError, KeyError):
+            print("[!] Mean lifetime of radiocarbon was not provided")
+            mean_radio_life = int(input("[>] Enter mean radiocarbon lifetime \
+                                        (Cambridge=8267, Libby=8033): "))
+        self.mean_radio_life = mean_radio_life
+
+    def compute_local_age(self):
+        self.ds.assign(local_age=lambda x:
+                       -self.mean_radio_life*log((1000+x.dc14)/1000))
+        print("[i] Converted dc14 to age ",
+              f"using mean radioC lifetime {self.mean_radio_life}")
 
 
 class KMeansWorkflow(Workflow):
