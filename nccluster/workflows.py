@@ -6,7 +6,7 @@
 import configparser
 # import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-import netCDF4 as nc
+import nctoolkit as nc
 import numpy as np
 import pandas as pd
 
@@ -20,33 +20,50 @@ from tqdm import tqdm
 from nccluster.multisliceviewer import MultiSliceViewer
 
 
-class KMeansWorkflow:
+class Workflow:
 
     def __init__(self, config_path=None):
 
+        self.config_path = config_path
+
+        self.read_config_file()
+        self.get_nc_files()
+        self.load_ds()
+        self.preprocess_ds()
+
+    def read_config_file(self):
         # parse config file if present
         try:
             self.config = configparser.ConfigParser()
-            self.config.read(config_path)
-            print(f"[i] Read config: {config_path}")
+            self.config.read(self.config_path)
+            print(f"[i] Read config: {self.config_path}")
         except Exception:
             print('[i] Config file not passed via commandline')
 
+    def get_nc_files(self):
         # load data from file,
         # asking user to specify a path if not provided in config
         try:
-            self.nc_file = self.config['default']['nc_file']
+            self.nc_files = self.config['default']['nc_files']
         except (NameError, KeyError):
             print('[i] Data file path not provided')
-            self.nc_file = input(
+            self.nc_files = input(
                 "[>] Please type the path of the netCDF file to use: ")
-        print(f"[i] NetCDF file: {self.nc_file}")
+        self.nc_files = self.nc_files.split(",")
+        print(f"[i] NetCDF file(s): {self.nc_files}")
 
-        # load data
-        self.nc_data = nc.Dataset(self.nc_file)
+    def load_ds(self):
+        print("[i] Loading data")
+        self.ds = nc.DataSet(self.nc_files)
+
+    def preprocess_ds(self):
+        print("[i] Preprocessing data")
+
+
+class KMeansWorkflow(Workflow):
 
     def run(self):
-        self.selected_vars = self.get_selected_vars()
+        self.get_selected_vars()
 
         if self.get_metrics_mode_bool():
             self.run_metrics()
@@ -54,14 +71,14 @@ class KMeansWorkflow:
             self.run_kmeans()
 
     def run_kmeans(self):
-        pipe = self.construct_pipeline()
+        self.construct_pipeline()
         self.construct_features()
-        n_clusters = self.get_n_clusters()
+        self.get_n_clusters()
 
-        kmeans = pipe['clusterer']['kmeans']
-        kmeans.n_clusters = n_clusters
+        kmeans = self.pipe['clusterer']['kmeans']
+        kmeans.n_clusters = self.n_clusters
         print("[i] Running k-means, please stand by...")
-        pipe.fit(self.features)
+        self.pipe.fit(self.features)
         self.labels = kmeans.labels_
         self.labels += 1
 
@@ -79,7 +96,7 @@ class KMeansWorkflow:
         labels_shaped = np.reshape(labels_flat, self.shape_original)
 
         # map out the clusters each with its own color
-        plot_title = f"Kmeans results with {n_clusters} clusters"
+        plot_title = f"Kmeans results with {self.n_clusters} clusters"
         plot_title += f" based on {self.selected_vars}"
 
         # read color palette from file or default to rainbow
@@ -101,55 +118,57 @@ class KMeansWorkflow:
             self.interactive_var_plot()
             # finally ask user which vars to use
             selected_vars = input(
-                "[>] Type the variables to use in kmeans separated by commas: "
-            )
+                "\n[>] Type the variables to use in kmeans " +
+                "separated by commas: ")
             selected_vars = selected_vars.split(",")
 
         print(f"[i] Selected variables for k-means: {selected_vars}")
-        return selected_vars
+        self.selected_vars = selected_vars
 
     def list_plottable_vars(self):
         # get an alphabetical list of plottable variables
-        plottable_vars = list(self.nc_data.variables.keys())
-        plottable_vars.sort()
+        plottable_vars = self.ds.variables
+        df = self.ds.contents
 
         # list plottable variables for the user to inspect
         for i, var in enumerate(plottable_vars):
             # print in a nice format if possible
             try:
-                long_name = self.nc_data.variables[var].long_name
-                dims = self.nc_data.variables[var].dimensions
-                print(f"{i}. {var}\n\t{dims}\n\t{long_name}")
+                long_name = df.loc[df['variable'] == var].long_name.values[0]
+                print(f"{i}. {var}\n\t{long_name}")
             except Exception:
-                print(f"{i}. {var}\n{self.nc_data[var]}")
+                print(f"{i}. {var}")
 
-    def plot_var(self, string_var_to_plot):
+    def plot_var(self, var_to_plot):
         try:
             # get the data as an array
-            var_to_plot = self.nc_data[string_var_to_plot]
-            data_to_plot = var_to_plot.__array__()
+            ds_tmp = self.ds.copy()
+            ds_tmp.subset(variables=var_to_plot)
+            var_xr = ds_tmp.to_xarray()
+            data_to_plot = var_xr[var_to_plot].__array__()
 
             # add more info in plot title if possible
             try:
-                plot_title = string_var_to_plot + " ("\
-                    + var_to_plot.long_name + ") " + var_to_plot.units
+                plot_title = var_to_plot + " ("\
+                    + var_xr[var_to_plot].long_name + ") "\
+                    + var_xr[var_to_plot].units
             except AttributeError:
-                plot_title = string_var_to_plot
+                plot_title = var_to_plot
 
             MultiSliceViewer(data_to_plot, plot_title).show()
 
         except IndexError:
-            print(f"[!] {string_var_to_plot} not found; check spelling")
+            print(f"[!] {var_to_plot} not found; check spelling")
 
     def interactive_var_plot(self):
         try:
             while True:
                 # get the name of the variable the user wants to plot
-                string_var_to_plot = input(
+                var_to_plot = input(
                     "[>] Type a variable to plot or Ctrl+C to"
                     " proceed to choosing k-means parameters: "
                 )
-                self.plot_var(string_var_to_plot)
+                self.plot_var(var_to_plot)
 
         except KeyboardInterrupt:
             # Ctrl+C to exit loop
@@ -172,8 +191,8 @@ class KMeansWorkflow:
         except NameError:
             # will not ask but use the kmeans default
             max_iter = 300
-        print(f"[i] K-means hyperparameters: \
-              n_init = {n_init}, max_iter = {max_iter}")
+        print("[i] K-means hyperparameters: ",
+              f"n_init = {n_init}, max_iter = {max_iter}")
         clusterer = Pipeline([("kmeans", KMeans(
                         init="k-means++",
                         n_init=n_init,
@@ -181,17 +200,16 @@ class KMeansWorkflow:
                     )
                 )])
 
-        pipe = Pipeline([
+        self.pipe = Pipeline([
                 ("preprocessor", preprocessor),
                 ("clusterer", clusterer)
             ])
-        return pipe
 
     def run_metrics(self):
 
-        pipe = self.construct_pipeline()
+        self.construct_pipeline()
         self.construct_features()
-        max_clusters = self.get_max_clusters()
+        self.get_max_clusters()
 
         # iterate over different cluster sizes to find "optimal" k
         print("[i] Now computing clustering metrics")
@@ -202,20 +220,21 @@ class KMeansWorkflow:
         davies_bouldin = []
 
         # run k-means with increasing number of clusters
-        for i in tqdm(range(2, max_clusters),
+        for i in tqdm(range(2, self.max_clusters),
                       desc='k-means run: '):
             # set the number of clusters for kmeans
-            pipe['clusterer']['kmeans'].n_clusters = i
+            self.pipe['clusterer']['kmeans'].n_clusters = i
 
             # actually run kmeans
-            pipe.fit(self.features)
+            self.pipe.fit(self.features)
 
             # handy variables for computing scores
-            scaled_features = pipe['preprocessor'].transform(self.features)
-            labels = pipe['clusterer']['kmeans'].labels_
+            scaled_features =\
+                self.pipe['preprocessor'].transform(self.features)
+            labels = self.pipe['clusterer']['kmeans'].labels_
 
             # compute various scores for current k
-            sse.append(pipe['clusterer']['kmeans'].inertia_)
+            sse.append(self.pipe['clusterer']['kmeans'].inertia_)
             # silhouettes.append(silhouette_score(scaled_features, labels))
             calinski_harabasz.append(
                 calinski_harabasz_score(scaled_features, labels))
@@ -225,16 +244,16 @@ class KMeansWorkflow:
         # plot the various scores versus number of clusters
         fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
 
-        ax1.scatter(range(2, max_clusters), sse)
+        ax1.scatter(range(2, self.max_clusters), sse)
         ax1.title.set_text('Sum of squared errors, choose elbow point')
 
         # ax2.scatter(range(2, max_clusters), silhouettes)
         # ax2.title.set_text('Silhouette Score, higher is better')
 
-        ax3.scatter(range(2, max_clusters), calinski_harabasz)
+        ax3.scatter(range(2, self.max_clusters), calinski_harabasz)
         ax3.title.set_text('Calinski-Harabasz Index, higher is better')
 
-        ax4.scatter(range(2, max_clusters), davies_bouldin)
+        ax4.scatter(range(2, self.max_clusters), davies_bouldin)
         ax4.title.set_text('Davies-Bouldin Index, lower is better')
 
         plt.show()
@@ -255,7 +274,7 @@ class KMeansWorkflow:
         except (KeyError, ValueError):
             print("[!] You have not specified the number of clusters to use")
             n_clusters = int(input("[>] Enter number of clusters: "))
-        return n_clusters
+        self.n_clusters = n_clusters
 
     def get_max_clusters(self):
         try:
@@ -263,11 +282,13 @@ class KMeansWorkflow:
         except KeyError:
             print("[!] You have not specified the maximum number of clusters")
             max_clusters = int(input("[>] Max clusters for metrics: "))
-        return max_clusters
+        self.max_clusters = max_clusters
 
     def construct_features(self):
         selected_vars = self.selected_vars
-        nc_data = self.nc_data
+        ds_tmp = self.ds.copy()
+        ds_tmp.subset(variables=selected_vars)
+        nc_data = ds_tmp.to_xarray()
 
         selected_vars_dims = [len(nc_data[var].shape)
                               for var in selected_vars]
