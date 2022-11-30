@@ -33,7 +33,7 @@ class Workflow:
             self.config = configparser.ConfigParser()
             self.config.read(self.config_path)
             print(f"[i] Read config: {self.config_path}")
-        except Exception:
+        except FileNotFoundError:
             print('[i] Config file not passed via commandline')
 
     def get_nc_files(self):
@@ -51,6 +51,20 @@ class Workflow:
     def load_ds(self):
         print("[i] Loading data")
         self.ds = nc.DataSet(self.nc_files)
+        try:
+            subset = self.config['default']['subset'].split(",")
+            self.ds.subset(variable=subset)
+        except (NameError, KeyError):
+            pass
+        try:
+            self.ds.merge()
+        except Exception:
+            print("[fatal] You have specified multiple netCDF files to use",
+                  "but these could not be merged for further analysis.",
+                  "Consider subsetting the data as shown in the example",
+                  "config, keeping only variables of interest. Or merge your",
+                  "datasets externally.")
+            exit()
 
     def preprocess_ds(self):
         print("[i] Preprocessing data")
@@ -59,46 +73,49 @@ class Workflow:
 class RadioCarbonWorkflow(Workflow):
 
     def preprocess_ds(self):
-        self.get_dc14_var_name()
-        self.rename_dc14_variable()
-        self.get_mean_radiocarbon_lifetime()
-        self.compute_local_age()
+        self.construct_rename_dict(['dc14', 'dic', 'di14c'])
+        self.rename_vars()
 
-    def get_dc14_var_name(self):
+        if 'dic' in self.ds.variables and\
+                'di14c' in self.ds.variables and\
+                'dc14' not in self.ds.variables:
+            self.compute_dc14()
+
+        if 'dc14' in self.ds.variables:
+            self.get_mean_radiocarbon_lifetime()
+            self.compute_local_age()
+
+    def construct_rename_dict(self, vars):
         # get the name of the Delta14C variable in dataset
         # from config or interactively
-        try:
-            self.dc14_var_name = self.config['radiocarbon']['dc14']
-        except (NameError, KeyError):
-            print("[!] Name of the Delta14Carbon variable was not provided")
-            self.dc14_var_name = input("[>] Enter Delta14Carbon variable name \
-                                       as it appears in the dataset: ")
+        self.rename_dict = {}
+        for var in vars:
+            try:
+                self.rename_dict[var] = self.config['radiocarbon'][var]
+            except NameError:
+                print(f"[!] Name of the {var} variable was not provided")
+                self.rename_dict[var] = input("[>] Enter {var} variable name \
+                                        as it appears in the dataset: ")
+            except KeyError:
+                pass
 
-    def get_di14c_var_name(self):
-        # get the name of the DI14C variable in dataset
-        # from config or interactively
-        try:
-            self.di14c_var_name = self.config['radiocarbon']['di14c']
-        except (NameError, KeyError):
-            print("[!] Name of the DI14C variable was not provided")
-            self.di14c_var_name = input("[>] Enter DI14C variable name \
-                                       as it appears in the dataset: ")
-
-    def rename_dc14_variable(self):
-        # rename Delta14C variable to dc14 for easy reference
-        self.ds.rename({self.dc14_var_name: 'dc14'})
-        print(f"[i] Renamed variable {self.dc14_var_name} to dc14")
+    def rename_vars(self):
+        # rename variables to be used in calculations for easy reference
+        for key, value in self.rename_dict.items():
+            self.ds.rename({value: key})
+            print(f"[i] Renamed variable {value} to {key}")
+        self.ds.run()
 
     def get_mean_radiocarbon_lifetime(self):
         # get the mean radiocarbon lifetime from config or interactively
         try:
-            mean_radio_life =\
+            self.mean_radio_life =\
                 int(self.config['radiocarbon']['mean_radiocarbon_lifetime'])
         except (NameError, KeyError):
             print("[!] Mean lifetime of radiocarbon was not provided")
-            mean_radio_life = int(input("[>] Enter mean radiocarbon lifetime \
+            self.mean_radio_life = int(input(
+                "[>] Enter mean radiocarbon lifetime \
                                         (Cambridge=8267, Libby=8033): "))
-        self.mean_radio_life = mean_radio_life
 
     def compute_local_age(self):
         self.ds.assign(local_age=lambda x:
@@ -106,8 +123,14 @@ class RadioCarbonWorkflow(Workflow):
         print("[i] Converted dc14 to age ",
               f"using mean radioC lifetime {self.mean_radio_life}")
 
+    def compute_dc14(self):
+        self.ds.assign(dc14=lambda x:
+                       (x.di14c/x.dic-1)*1000)
+        self.ds.run()
+        print("[i] Computed dc14 from di14c and dic")
 
-class KMeansWorkflow(Workflow):
+
+class KMeansWorkflow(RadioCarbonWorkflow):
 
     def run(self):
         self.get_selected_vars()
