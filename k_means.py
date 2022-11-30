@@ -15,16 +15,6 @@ args = parser.parse_args()
 km_workflow = KMeansWorkflow(args.config)
 km_workflow.run()
 
-# labels = km_workflow.labels
-# df = km_workflow.df.dropna()
-
-# plt.figure()
-# plt.scatter(df['LOCAL_AGE'], df['o2'], c=labels, marker=',')
-# plt.show()
-
-
-# labels_colors = cmap(np.linspace(0, 1, num=n_clusters))
-
 # rescale the centroids back to original data ranges
 # centroids = kmeans.cluster_centers_
 # centroids = pipe['preprocessor'].inverse_transform(centroids)
