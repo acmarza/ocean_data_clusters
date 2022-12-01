@@ -12,6 +12,7 @@ from sklearn.metrics import calinski_harabasz_score, davies_bouldin_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
+from ts_learn.utils import to_time_seties_dataset
 
 from nccluster.multisliceviewer import MultiSliceViewer
 
@@ -67,12 +68,16 @@ class Workflow:
             exit()
 
     def preprocess_ds(self):
-        print("[i] Preprocessing data")
+        print("[!] No preprocessing routine defined")
+
+    def run(self):
+        print("[!] Nothing to run. Did you forget to override run() method?")
 
 
 class RadioCarbonWorkflow(Workflow):
 
     def preprocess_ds(self):
+        print("[i] Preprocessing data")
         self.construct_rename_dict(['dc14', 'dic', 'di14c'])
         self.rename_vars()
 
@@ -128,6 +133,84 @@ class RadioCarbonWorkflow(Workflow):
                        (x.di14c/x.dic-1)*1000)
         self.ds.run()
         print("[i] Computed dc14 from di14c and dic")
+
+
+class TimeseriesWorkflowBase(RadioCarbonWorkflow):
+    def __init__(self, config_path):
+        print("[i] Starting timeseries analysis workflow")
+        RadioCarbonWorkflow.__init__(self, config_path)
+        self.get_ts_array()
+
+    def run(self):
+        self.get_plot_all_ts_bool()
+        if self.plot_all_ts_bool:
+            self.plot_all_ts()
+
+    def get_ts_array(self):
+        ds_tmp = self.ds.copy()
+        ds_tmp.subset(variable='local_age')
+        age_xr = ds_tmp.to_xarray()
+        age_array = age_xr['local_age'].__array__()
+        # offset ages to make more sense (else they'd be negative)
+        min_age = np.nanmin(age_array)
+        age_array -= min_age
+        # produce an array containing the R-age time series at each grid point
+        t, z, y, x = age_array.shape
+        self.ts_array = np.reshape(age_array[:, 0], [t, x*y]).T
+
+    def get_plot_all_ts_bool(self):
+        # find out from config or interactively whether to show
+        # all time series on one plot
+        try:
+            self.plot_all_ts_bool =\
+                config['timeseries'].getboolean('plot_all_ts')
+        except (NameError, KeyError):
+            yn = input("[>] Show a plot of all the R-age timeseries? (y/n): ")
+            self.plot_all_ts_bool = (yn == 'y')
+
+    def plot_all_ts(self):
+        # plot evolution of every grid point over time
+        self.fig, self.ax = plt.subplots()
+        for ts in tqdm(self.ts_array,
+                       desc="[i] Plotting combined time series"):
+            self.ax.plot(range(0, len(ts)), ts)
+        self.ax.xlabel('time step')
+        self.ax.ylabel('age')
+        self.ax.title('age over time')
+        self.fig.show()
+
+
+class TSClusteringWorkflow(TimeseriesWorkflowBase):
+    def __init__(self, config_path):
+        TimeseriesWorkflowBase.__init__(self, config_path)
+        self.get_ts()
+        self.get_n_clusters()
+
+    def get_ts(self):
+        # convert array of time series to pandas dataframe to drop NaN entries,
+        # then back to array, then to time series dataset for use with
+        # tslearn
+        df = pd.DataFrame(self.ts_array)
+        ts = np.array(df.dropna())
+        ts = to_time_seties_dataset(ts)
+
+    def get_n_clusters(self):
+        try:
+            self.n_clusters = int(self.config['timeseries']['n_clusters'])
+        except (KeyError, ValueError):
+            print("[!] You have not specified the number of clusters to use")
+            self.n_clusters = int(input("[>] Enter number of clusters for",
+                                        "timeseries k-means: "))
+
+    def get_model_save_path(self):
+        # get the path of the pickle save file from config or interactively
+        try:
+            self.model_save_path = config['timeseries']['pickle']
+        except (KeyError, NameError):
+            print("[!] Model save file not provided")
+            self.model_save_path = input(
+                "[>] Enter a file path to save/read pickled model now: "
+            )
 
 
 class KMeansWorkflow(RadioCarbonWorkflow):
@@ -340,11 +423,10 @@ class KMeansWorkflow(RadioCarbonWorkflow):
 
     def get_n_clusters(self):
         try:
-            n_clusters = int(self.config['k-means']['n_clusters'])
+            self.n_clusters = int(self.config['k-means']['n_clusters'])
         except (KeyError, ValueError):
             print("[!] You have not specified the number of clusters to use")
-            n_clusters = int(input("[>] Enter number of clusters: "))
-        self.n_clusters = n_clusters
+            self.n_clusters = int(input("[>] Enter number of clusters: "))
 
     def get_max_clusters(self):
         try:

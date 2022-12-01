@@ -11,8 +11,6 @@ from tslearn.utils import to_time_series_dataset
 from nccluster.corrviewer import CorrelationViewer
 from nccluster.workflows import RadioCarbonWorkflow
 
-print("[i] Starting R-ages analysis workflow")
-
 # define and parse commandline arguments
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", "-c", help="file to read configuration from, \
@@ -20,65 +18,6 @@ parser.add_argument("--config", "-c", help="file to read configuration from, \
 args = parser.parse_args()
 
 radio_c_workflow = RadioCarbonWorkflow(args.config)
-
-# get the raw data array of local ages
-xr_ds = radio_c_workflow.ds.to_xarray()
-age_array = xr_ds['local_age'].__array__()
-
-# slice before anomaly specific to our data
-# age_array = age_array[:78]
-
-# offset ages to make more sense (else they'd be negative)
-min_age = np.nanmin(age_array)
-age_array -= min_age
-
-# produce an array containing the R-age time series at each grid point
-t, z, y, x = age_array.shape
-evolutions = np.reshape(age_array[:, 0], [t, x*y]).T
-
-# find out from config or interactively whether user wants to plot all time
-# series on one plot
-try:
-    plot_all_evo = config['timeseries'].getboolean('plot_all_evo')
-except (NameError, KeyError):
-    yn = input("[>] Show a plot of all the R-age timeseries? (y/n): ")
-    plot_all_evo = (yn == 'y')
-
-# draw plot if yes
-if plot_all_evo:
-    # plot evolution of every grid point over time
-    all_evo_fig = plt.figure()
-    for point in tqdm(range(0, x*y), desc="[i] Plotting combined time series"):
-        plt.plot(range(0, t), evolutions[point, :])
-    plt.xlabel('time step')
-    plt.ylabel('age')
-    plt.title('age over time')
-    all_evo_fig.show()
-
-# find out whether to run timeseries clustering, from config or interactively
-try:
-    run_ts = config['timeseries'].getboolean('run')
-except (KeyError, NameError):
-    print("[!] You have not specified whether to run timeseries clustering")
-    yn = input("[>] Run timeseries clustering? (y/n): ")
-    run_ts = (yn == 'y')
-
-if run_ts:
-    # convert array of time series to pandas dataframe to drop NaN entries,
-    # then back to array, then to time series dataset for use with tslearn
-    df = pd.DataFrame(evolutions)
-    evolutions = np.array(df.dropna())
-    ts = to_time_series_dataset(evolutions)
-
-    # get the number of clusters for k-means and plotting, from config or
-    # interactively
-    try:
-        n_clusters = int(config['timeseries']['n_clusters'])
-    except (NameError, KeyError):
-        n_clusters = int(input(
-            "[>] Enter number of clusters for timeseries k-means: "
-        ))
-    print(f"[i] Number of clusters for time series analysis: {n_clusters}")
 
     # get the path of the pickle save file from config or interactively
     try:
@@ -150,15 +89,6 @@ if run_ts:
     plt.figure()
     plt.imshow(labels_shaped, origin='lower')
     plt.show()
-
-# find out whether to cluster based on correlation matrix, from config or
-# interactively
-try:
-    run_corr = config['correlation'].getboolean('run')
-except (KeyError, NameError):
-    print("[!] You have not specified whether to run correlation clustering")
-    yn = input("[>] Run correlation clustering? (y/n): ")
-    run_corr = (yn == 'y')
 
 if run_corr:
     # find out whether to mask using p-values, from config or interactively
