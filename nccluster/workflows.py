@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import nctoolkit as nc
 import numpy as np
 import pandas as pd
+import pickle
 
 from math import log
 from sklearn.cluster import KMeans
@@ -12,7 +13,8 @@ from sklearn.metrics import calinski_harabasz_score, davies_bouldin_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import MinMaxScaler
 from tqdm import tqdm
-from ts_learn.utils import to_time_seties_dataset
+from tslearn.clustering import TimeSeriesKMeans
+from tslearn.utils import to_time_series_dataset
 
 from nccluster.multisliceviewer import MultiSliceViewer
 
@@ -155,7 +157,7 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
         min_age = np.nanmin(age_array)
         age_array -= min_age
         # produce an array containing the R-age time series at each grid point
-        t, z, y, x = age_array.shape
+        t, z, y, x = self.shape_original = age_array.shape
         self.ts_array = np.reshape(age_array[:, 0], [t, x*y]).T
 
     def get_plot_all_ts_bool(self):
@@ -163,21 +165,21 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
         # all time series on one plot
         try:
             self.plot_all_ts_bool =\
-                config['timeseries'].getboolean('plot_all_ts')
+                self.config['timeseries'].getboolean('plot_all_ts')
         except (NameError, KeyError):
             yn = input("[>] Show a plot of all the R-age timeseries? (y/n): ")
             self.plot_all_ts_bool = (yn == 'y')
 
     def plot_all_ts(self):
         # plot evolution of every grid point over time
-        self.fig, self.ax = plt.subplots()
+        fig = plt.figure()
+        ax = fig.add_subplot()
         for ts in tqdm(self.ts_array,
                        desc="[i] Plotting combined time series"):
-            self.ax.plot(range(0, len(ts)), ts)
-        self.ax.xlabel('time step')
-        self.ax.ylabel('age')
-        self.ax.title('age over time')
-        self.fig.show()
+            ax.plot(range(0, len(ts)), ts)
+        ax.set_xlabel('time step')
+        ax.set_ylabel('age')
+        ax.set_title('age over time')
 
 
 class TSClusteringWorkflow(TimeseriesWorkflowBase):
@@ -185,14 +187,25 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         TimeseriesWorkflowBase.__init__(self, config_path)
         self.get_ts()
         self.get_n_clusters()
+        self.get_model_save_path()
+
+    def run(self):
+        TimeseriesWorkflowBase.run(self)
+        try:
+            self.read_model_save_file()
+        except FileNotFoundError:
+            self.train_new_model()
+            self.save_model()
+        self.plot_ts_clusters()
+        self.map_clusters()
 
     def get_ts(self):
         # convert array of time series to pandas dataframe to drop NaN entries,
         # then back to array, then to time series dataset for use with
         # tslearn
-        df = pd.DataFrame(self.ts_array)
-        ts = np.array(df.dropna())
-        ts = to_time_seties_dataset(ts)
+        self.df = pd.DataFrame(self.ts_array)
+        ts = np.array(self.df.dropna())
+        self.ts = to_time_series_dataset(ts)
 
     def get_n_clusters(self):
         try:
@@ -205,12 +218,83 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
     def get_model_save_path(self):
         # get the path of the pickle save file from config or interactively
         try:
-            self.model_save_path = config['timeseries']['pickle']
+            self.model_save_path = self.config['timeseries']['pickle']
         except (KeyError, NameError):
             print("[!] Model save file not provided")
             self.model_save_path = input(
                 "[>] Enter a file path to save/read pickled model now: "
             )
+
+    def read_model_save_file(self):
+        with open(self.model_save_path, 'rb') as file:
+            self.km = pickle.load(file)
+            print(f"[i] Read in {self.model_save_path}")
+
+    def train_new_model(self):
+        # initialise model
+        self.km = TimeSeriesKMeans(
+            n_clusters=self.n_clusters,
+            metric='euclidean',
+            max_iter=10,
+            n_jobs=-1
+        )
+        print("[i] Fitting k-means model, please stand by")
+
+        # actually fit the model
+        self.km.fit(self.ts)
+
+    def save_model(self):
+        # write k-means model object to file
+        with open(self.model_save_path, 'wb') as file:
+            pickle.dump(self.km, file)
+            print(f"[i] Saved model to {self.model_save_path}")
+
+    def plot_ts_clusters(self):
+        # get predictions for our timeseries from trained model
+        # i.e. to which cluster each timeseries belongs
+        # consider changing this to labels
+        # y_pred = self.km.predict(self.ts)
+        y_pred = self.km.labels_
+
+        # plot each cluster members and their barycenter
+        # initialise figure
+        clusters_fig = plt.figure()
+
+        # for each cluster/label
+        for yi in range(self.n_clusters):
+            # create a subplot in a table with n_cluster rows and 1 column
+            # this subplot is number yi+1 because we're counting from 0
+            plt.subplot(self.n_clusters, 1, yi + 1)
+            # for every timeseries that has been assigned label yi
+            for xx in self.ts[y_pred == yi]:
+                # plot with a thin transparent line
+                plt.plot(xx.ravel(), "k-", alpha=.2)
+            # plot the cluster barycenter
+            plt.plot(self.km.cluster_centers_[yi].ravel(), "r-")
+            # label the cluster
+            plt.text(0.55, 0.85, 'Cluster %d' % (yi + 1),
+                     transform=plt.gca().transAxes)
+        # add a title at the top of the figure
+        clusters_fig.suptitle("k-means results")
+        # finally show the figure
+        clusters_fig.show()
+
+    def map_clusters(self):
+        # assign predicted labels to the original dataframe
+        self.df.loc[
+            self.df.index.isin(self.df.dropna().index),
+            'labels'] = self.km.labels_
+
+        # convert to array of labels and reshape into 2D for map
+        labels_flat = np.ma.masked_array(self.df['labels'])
+        _, _, y, x = self.shape_original
+        labels_shaped = np.reshape(labels_flat, [x, y])
+
+        # finally view the clusters on a map
+        clusters_fig = plt.figure()
+        ax = clusters_fig.add_subplot()
+        ax.imshow(labels_shaped, origin='lower')
+        clusters_fig.show()
 
 
 class KMeansWorkflow(RadioCarbonWorkflow):
