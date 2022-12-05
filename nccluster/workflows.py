@@ -17,6 +17,7 @@ from tslearn.clustering import TimeSeriesKMeans
 from tslearn.utils import to_time_series_dataset
 
 from nccluster.multisliceviewer import MultiSliceViewer
+from nccluster.corrviewer import CorrelationViewer
 
 
 class Workflow:
@@ -127,7 +128,7 @@ class RadioCarbonWorkflow(Workflow):
     def compute_local_age(self):
         self.ds.assign(local_age=lambda x:
                        -self.mean_radio_life*log((1000+x.dc14)/1000))
-        print("[i] Converted dc14 to age ",
+        print("[i] Converted dc14 to age",
               f"using mean radioC lifetime {self.mean_radio_life}")
 
     def compute_dc14(self):
@@ -156,6 +157,7 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
         # offset ages to make more sense (else they'd be negative)
         min_age = np.nanmin(age_array)
         age_array -= min_age
+        self.age_array = age_array
         # produce an array containing the R-age time series at each grid point
         t, z, y, x = self.shape_original = age_array.shape
         self.ts_array = np.reshape(age_array[:, 0], [t, x*y]).T
@@ -180,6 +182,58 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
         ax.set_xlabel('time step')
         ax.set_ylabel('age')
         ax.set_title('age over time')
+
+
+class CorrelationWorkflow(TimeseriesWorkflowBase):
+
+    def __init__(self, config_path):
+        TimeseriesWorkflowBase.__init__(self, config_path)
+
+        print(f'[debug] {self.ts_array.shape}')
+
+        self.get_pvalues_bool()
+        self.kwargs = {
+            'volume':  self.age_array,
+            'title': "R-ages",
+            'pvalues': self.pvalues
+        }
+        if self.pvalues:
+            self.get_corr_mat_file()
+            self.get_corr_mat_file()
+            self.kwargs['corr_mat_file'] = self.corr_mat_file
+            self.kwargs['pval_mat_file'] = self.pval_mat_file
+
+    def run(self):
+        TimeseriesWorkflowBase.run(self)
+        self.corrviewer = CorrelationViewer(**self.kwargs)
+        plt.show()
+
+    def get_pvalues_bool(self):
+        # find out whether to mask using p-values, from config or interactively
+        try:
+            self.pvalues = self.config['correlation'].getboolean('pvalues')
+        except (NameError, KeyError):
+            yn = input("[>] Mask out grid points with insignificant \
+                    ( p > 0.05 ) correlation? (y/n): ")
+            self.pvalues = (yn == 'y')
+
+    def get_corr_mat_file(self):
+        try:
+            self.corr_mat_file = self.config['correlation']['corr_mat_file']
+        except (KeyError, NameError):
+            print("[!] Correlation matrix save file not provided")
+            self.corr_mat_file = input(
+                "[>] Enter file path to save/read correlation matrix now: "
+            )
+
+    def get_pval_mat_file(self):
+        try:
+            self.pval_mat_file = self.config['correlation']['pval_mat_file']
+        except (KeyError, NameError):
+            print("[!] P-value matrix save file not provided")
+            self.pval_mat_file = input(
+                "[>] Enter file path to save/read p-value matrix now: "
+            )
 
 
 class TSClusteringWorkflow(TimeseriesWorkflowBase):
