@@ -1,8 +1,3 @@
-# multi slice viewer adapted from
-# https://www.datacamp.com/tutorial/matplotlib-3d-volumetric-data
-
-# kmeans pipeline based on
-# https://realpython.com/k-means-clustering-python/
 import argparse
 from nccluster.workflows import KMeansWorkflow
 
@@ -12,6 +7,7 @@ parser.add_argument("--config", "-c", help="file to read configuration from,\
                      if parameters not supplied interactively")
 args = parser.parse_args()
 
+# initialise and run the workflow
 km_workflow = KMeansWorkflow(args.config)
 km_workflow.run()
 

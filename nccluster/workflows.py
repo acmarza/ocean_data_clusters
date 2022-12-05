@@ -189,8 +189,6 @@ class CorrelationWorkflow(TimeseriesWorkflowBase):
     def __init__(self, config_path):
         TimeseriesWorkflowBase.__init__(self, config_path)
 
-        print(f'[debug] {self.ts_array.shape}')
-
         self.get_pvalues_bool()
         self.kwargs = {
             'volume':  self.age_array,
@@ -252,6 +250,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
             self.save_model()
         self.plot_ts_clusters()
         self.map_clusters()
+        plt.show()
 
     def get_ts(self):
         # convert array of time series to pandas dataframe to drop NaN entries,
@@ -355,8 +354,9 @@ class KMeansWorkflow(RadioCarbonWorkflow):
 
     def run(self):
         self.get_selected_vars()
+        self.get_metrics_mode_bool()
 
-        if self.get_metrics_mode_bool():
+        if self.metrics_mode:
             self.run_metrics()
         else:
             self.run_kmeans()
@@ -474,12 +474,12 @@ class KMeansWorkflow(RadioCarbonWorkflow):
 
         try:
             n_init = int(self.config['k-means']['n_init'])
-        except NameError:
+        except (KeyError, NameError):
             # will not ask but use the kmeans default
             n_init = 10
         try:
             max_iter = int(self.config['k-means']['max_iter'])
-        except NameError:
+        except (KeyError, NameError):
             # will not ask but use the kmeans default
             max_iter = 300
         print("[i] K-means hyperparameters: ",
@@ -551,13 +551,13 @@ class KMeansWorkflow(RadioCarbonWorkflow):
 
     def get_metrics_mode_bool(self):
 
-        metrics_mode = self.config['k-means'].getboolean('metrics_mode')
-        if metrics_mode is None:
+        try:
+            self.metrics_mode =\
+                self.config['k-means'].getboolean('metrics_mode')
+        except (KeyError, NameError):
             print("[!] You have not specified whether to run in metrics mode")
             yn = input("[>] Evaluate clustering metrics? (y/n): ")
-            metrics_mode = (yn == 'y')
-        print(metrics_mode)
-        return metrics_mode
+            self.metrics_mode = (yn == 'y')
 
     def get_n_clusters(self):
         try:
