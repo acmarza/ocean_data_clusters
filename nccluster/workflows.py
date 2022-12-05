@@ -142,9 +142,9 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
         print("[i] Starting timeseries analysis workflow")
         RadioCarbonWorkflow.__init__(self, config_path)
         self.get_ts_array()
+        self.get_plot_all_ts_bool()
 
     def run(self):
-        self.get_plot_all_ts_bool()
         if self.plot_all_ts_bool:
             self.plot_all_ts()
 
