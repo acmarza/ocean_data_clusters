@@ -5,9 +5,10 @@ A collection of python scripts that use unsupervised machine learning techniques
 
 ## Installation
 
-Clone the repository::
+Clone the repository:
 ```
 git clone https://gitlab.com/earth15/ocean_data_clusters.git
+cd ocean_data_clusters
 
 ```
 Create a new conda environment and install the required python packages:
