@@ -6,16 +6,16 @@ A collection of python scripts that use unsupervised machine learning techniques
 ## Installation
 
 Clone the repository::
-```bash
+```
 git clone https://gitlab.com/earth15/ocean_data_clusters.git
 
 ```
 Create a new conda environment and install the required python packages:
-```bash
+```
 conda create -n nccluster -c conda-forge configparser nctoolkit tqdm tslearn
 ```
 Activate the environment:
-```bash
+```
 conda activate nccluster
 ```
 ## Usage
@@ -23,7 +23,7 @@ Edit the example configuration file in folder 'configs' as needed (see explanati
 ### K-means clustering
 
 1. Run the script:
-```bash
+```
 python main.py --method km --config configs/example.conf
 ```
 
