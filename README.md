@@ -12,7 +12,7 @@ git clone https://gitlab.com/earth15/ocean_data_clusters.git
 ```
 Create a new conda environment and install the required python packages:
 ```bash
-conda create -n nccluster -c conda-forge configparser matplotlib nctoolkit numpy pandas scikit-learn scipy tqdm tslearn
+conda create -n nccluster -c conda-forge python==3.10.6 configparser matplotlib nctoolkit numpy pandas scikit-learn scipy tqdm tslearn
 ```
 ## Usage
 Edit the example configuration file in folder 'configs' as needed (see explanations therein). The only crucial value to specify for a first run is nc_files (path to netCDF data file(s)); the script will walk you through setting the other values.
