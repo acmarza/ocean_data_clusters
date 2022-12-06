@@ -390,8 +390,8 @@ class KMeansWorkflow(RadioCarbonWorkflow):
 
     def run(self):
         self.get_selected_vars()
-        self.get_metrics_mode_bool()
 
+        self.get_metrics_mode_bool()
         if self.metrics_mode:
             self.run_metrics()
         else:
@@ -402,15 +402,18 @@ class KMeansWorkflow(RadioCarbonWorkflow):
         self.construct_features()
         self.get_n_clusters()
 
+        # set the number of clusters of the KMeans object
         kmeans = self.pipe['clusterer']['kmeans']
         kmeans.n_clusters = self.n_clusters
+
+        # fit the model and adjust the labels to start from 1
         print("[i] Running k-means, please stand by...")
         self.pipe.fit(self.features)
         self.labels = kmeans.labels_
         self.labels += 1
 
         # now to reshape the 1D array of labels into a plottable 2D form
-        # first add the labels as a new column  to our pandas dataframe
+        # first add the labels as a new column to our pandas dataframe
         self.df.loc[
             self.df.index.isin(self.df.dropna().index),
             'labels'
@@ -433,6 +436,7 @@ class KMeansWorkflow(RadioCarbonWorkflow):
             palette = 'rainbow'
         # cmap = cm.get_cmap(palette)
 
+        # view the labels in 3D
         MultiSliceViewer(labels_shaped, title=plot_title, colorbar=False,
                          legend=True, cmap=palette).show()
 
@@ -441,6 +445,7 @@ class KMeansWorkflow(RadioCarbonWorkflow):
         try:
             selected_vars = self.config['k-means']['selected_vars'].split(",")
         except KeyError:
+            # let the user view and plot available variables
             self.list_plottable_vars()
             self.interactive_var_plot()
             # finally ask user which vars to use
@@ -502,7 +507,6 @@ class KMeansWorkflow(RadioCarbonWorkflow):
             pass
 
     def construct_pipeline(self):
-
         # construct the data processing pipeline including scaling and k-means
         preprocessor = Pipeline(
             [("scaler", MinMaxScaler())]
@@ -611,6 +615,7 @@ class KMeansWorkflow(RadioCarbonWorkflow):
         self.max_clusters = max_clusters
 
     def construct_features(self):
+        # some data manipulation to cast it in a useful xarray form
         selected_vars = self.selected_vars
         ds_tmp = self.ds.copy()
         ds_tmp.subset(variables=selected_vars)
@@ -622,7 +627,7 @@ class KMeansWorkflow(RadioCarbonWorkflow):
 
         # restrict analysis to ocean surface if some parameters are x-y only
         if n_spatial_dims == 2:
-            # flatten the data arrays,
+            # obtain the data arrays,
             # taking care to slice 4D ones at the surface
             selected_vars_arrays = [nc_data[var].__array__()
                                     if len(nc_data[var].shape) == 3
@@ -635,7 +640,6 @@ class KMeansWorkflow(RadioCarbonWorkflow):
 
         # take note of the original array shapes before flattening
         self.shape_original = selected_vars_arrays[0].shape
-
         selected_vars_flat = [array.flatten()
                               for array in selected_vars_arrays]
 
