@@ -40,11 +40,11 @@ class Workflow:
         except FileNotFoundError:
             print('[!] Config file not passed via commandline')
 
-    def _check_config_string(self, section, field,
-                             missing_msg="[!] Missing field in config",
-                             input_msg="[>] Please enter value: ",
-                             confirm_msg="[i] Got value: ",
-                             isbool=False):
+    def _check_config_field(self, section, field,
+                            missing_msg="[!] Missing field in config",
+                            input_msg="[>] Please enter value: ",
+                            confirm_msg="[i] Got value: ",
+                            isbool=False):
         try:
             value = self.config[section][field]
         except (NameError, KeyError):
@@ -56,7 +56,7 @@ class Workflow:
         print(confirm_msg + value)
 
     def __check_nc_files(self):
-        self._check_config_string(
+        self._check_config_field(
             'default', 'nc_files',
             missing_msg='[i] Data file path not provided',
             input_msg='[>] Please type the path of the netCDF file to use: ',
@@ -142,7 +142,7 @@ class RadioCarbonWorkflow(Workflow):
         self.ds.run()
 
     def __check_mean_radiocarbon_lifetime(self):
-        self._check_config_string(
+        self._check_config_field(
             'radiocarbon', 'mean_radiocarbon_lifetime',
             missing_msg="[!] Mean lifetime of radiocarbon was not provided",
             input_msg="[>] Enter mean radiocarbon lifetime \
@@ -193,7 +193,7 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
         self.age_array = age_array
 
     def __check_plot_all_ts_bool(self):
-        self._check_config_string(
+        self._check_config_field(
             'timeseries', 'plot_all_ts',
             missing_msg='[!] You have not specified whether to\
             show a plot of all the R-age timeseries',
@@ -207,12 +207,7 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
         # i.e. plot all the timeseries on one figure
         fig = plt.figure()
         ax = fig.add_subplot()
-
-        # age_array.shape = (t, z, y, x)
-        # ts_array = (n, t) at z = 0
-        ts_array = self.age_array[:, 0]
-        t, y, x = ts_array.shape
-        ts_array = np.reshape(ts_array, (t, x*y)).T
+        ts_array = self._make_ts_array()
 
         # plot each of the x*y timeseries
         for ts in tqdm(ts_array,
@@ -221,6 +216,26 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
         ax.set_xlabel('time step')
         ax.set_ylabel('age')
         ax.set_title('age over time')
+
+    def _make_ts_array(self):
+        # remember age_array.shape = (t, z, y, x)
+        # we want ts_array.shape = (n, t) at with n=x*y
+        # note the -1 in np.reshape tells it to figure out n on its own
+        ts_array = self.age_array[:, 0]
+        ts_array = np.reshape(ts_array,
+                              newshape=(ts_array.shape[0], -1)).T
+        return ts_array
+
+    def _make_df(self):
+        ts_array = self._make_ts_array()
+        df = pd.DataFrame(ts_array)
+        return df
+
+    def _make_ts(self):
+        df = self._make_df()
+        ts_droppedna_array = np.array(df.dropna())
+        ts = to_time_series_dataset(ts_droppedna_array)
+        return ts
 
 
 class CorrelationWorkflow(TimeseriesWorkflowBase):
@@ -246,7 +261,7 @@ class CorrelationWorkflow(TimeseriesWorkflowBase):
         plt.show()
 
     def __check_pvalues_bool(self):
-        self._check_config_string(
+        self._check_config_field(
             'correlation', 'pvalues',
             missing_msg="[!] You have not specified the p-values boolean.",
             input_msg="[>] Mask out grid points with insignificant \
@@ -255,33 +270,30 @@ class CorrelationWorkflow(TimeseriesWorkflowBase):
         )
 
     def __check_corr_mat_file(self):
-        self._check_config_string(
+        self._check_config_field(
             'correlation', 'corr_mat_file',
             missing_msg="[!] Correlation matrix save file not provided",
-            input_msg="[>] Enter file path to\
-            save/read correlation matrix now: ",
+            input_msg="[>] Enter file path to save/read correlation matrix: ",
             confirm_msg='[i] Correlation matrix savefile: '
         )
 
     def __check_pval_mat_file(self):
-        self._check_config_string(
+        self._check_config_field(
             'correlation', 'pval_mat_file',
             missing_msg="[!] P-value matrix save file not provided",
-            input_msg="[>] Enter file path to\
-            save/read p-value matrix now: ",
+            input_msg="[>] Enter file path to save/read p-value matrix : ",
             confirm_msg='[i] P-value matrix savefile: '
         )
 
 
 class TSClusteringWorkflow(TimeseriesWorkflowBase):
-    def __init__(self, config_path):
+    def _init_remaining_attrs(self):
         # run the parent init
-        TimeseriesWorkflowBase.__init__(self, config_path)
+        TimeseriesWorkflowBase._init_remaining_attrs(self)
 
         # compute and read additional attributes
-        self.get_ts()
-        self.get_n_clusters()
-        self.get_model_save_path()
+        self.__get_ts()
+        self.__check_model_save_path()
 
     def run(self):
         # run the parent workflow (plotting all timeseries)
@@ -289,53 +301,47 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
 
         # read model from file or train a new one
         try:
-            self.read_model_save_file()
+            self.__read_model_save_file()
         except FileNotFoundError:
-            self.train_new_model()
-            self.save_model()
+            self.__check_n_clusters()
+            self.__train_new_model()
+            self.__save_model()
 
         # plot and show results
         self.plot_ts_clusters()
         self.map_clusters()
         plt.show()
 
-    def get_ts(self):
-        # convert array of time series to pandas dataframe to drop NaN entries,
-        # then back to array, then to time series dataset for use with
-        # tslearn
-        self.df = pd.DataFrame(self.ts_array)
-        ts = np.array(self.df.dropna())
-        self.ts = to_time_series_dataset(ts)
+    def __get_ts(self):
+        self.ts = self._make_ts()
 
-    def get_n_clusters(self):
-        # get the number of clusters for the KMeans model
-        try:
-            self.n_clusters = int(self.config['timeseries']['n_clusters'])
-        except (KeyError, ValueError):
-            print("[!] You have not specified the number of clusters to use")
-            self.n_clusters = int(input("[>] Enter number of clusters for \
-                                        timeseries k-means: "))
+    def __check_n_clusters(self):
+        self._check_config_field(
+            'timeseries', 'n_clusters',
+            missing_msg="[!] You have not specified the number of clusters.",
+            input_msg="[>] Enter number of clusters for timeseries k-means: ",
+            confirm_msg='[i] n_clusters: '
+        )
 
-    def get_model_save_path(self):
-        # get the path of the pickle save file from config or interactively
-        try:
-            self.model_save_path = self.config['timeseries']['pickle']
-        except (KeyError, NameError):
-            print("[!] Model save file not provided")
-            self.model_save_path = input(
-                "[>] Enter a file path to save/read pickled model now: "
-            )
+    def __check_model_save_path(self):
 
-    def read_model_save_file(self):
+        self._check_config_field(
+            'timeseries', 'pickle',
+            missing_msg="[!] Model save file not provided",
+            input_msg="[>] Enter a file path to save/read pickled model now: ",
+            confirm_msg="[i] Model save file: "
+        )
+
+    def __read_model_save_file(self):
         # load in the trained model
-        with open(self.model_save_path, 'rb') as file:
+        with open(self.config['timeseries']['pickle'], 'rb') as file:
             self.km = pickle.load(file)
-            print(f"[i] Read in {self.model_save_path}")
+            print("[i] Read in model")
 
-    def train_new_model(self):
+    def __train_new_model(self):
         # initialise model
         self.km = TimeSeriesKMeans(
-            n_clusters=self.n_clusters,
+            n_clusters=self.config['timeseries']['n_clusters'],
             metric='euclidean',
             max_iter=10,
             n_jobs=-1
@@ -345,11 +351,11 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         # actually fit the model
         self.km.fit(self.ts)
 
-    def save_model(self):
+    def __save_model(self):
         # write k-means model object to file
-        with open(self.model_save_path, 'wb') as file:
+        with open(self.config['timeseries']['pickle'], 'wb') as file:
             pickle.dump(self.km, file)
-            print(f"[i] Saved model to {self.model_save_path}")
+            print("[i] Saved newly trained model")
 
     def plot_ts_clusters(self):
         # get predictions for our timeseries from trained model
@@ -357,16 +363,17 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         # consider changing this to labels
         # y_pred = self.km.predict(self.ts)
         y_pred = self.km.labels_
+        n_clusters = self.km.n_clusters
 
         # plot each cluster members and their barycenter
         # initialise figure
         clusters_fig = plt.figure()
 
         # for each cluster/label
-        for yi in range(self.n_clusters):
+        for yi in range(n_clusters):
             # create a subplot in a table with n_cluster rows and 1 column
             # this subplot is number yi+1 because we're counting from 0
-            plt.subplot(self.n_clusters, 1, yi + 1)
+            plt.subplot(n_clusters, 1, yi + 1)
             # for every timeseries that has been assigned label yi
             for xx in self.ts[y_pred == yi]:
                 # plot with a thin transparent line
@@ -383,13 +390,14 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
 
     def map_clusters(self):
         # assign predicted labels to the original dataframe
-        self.df.loc[
-            self.df.index.isin(self.df.dropna().index),
+        df = self._make_df()
+        df.loc[
+            df.index.isin(df.dropna().index),
             'labels'] = self.km.labels_
 
         # convert to array of labels and reshape into 2D for map
-        labels_flat = np.ma.masked_array(self.df['labels'])
-        _, _, y, x = self.shape_original
+        labels_flat = np.ma.masked_array(df['labels'])
+        _, _, y, x = self.age_array.shape
         labels_shaped = np.reshape(labels_flat, [y, x])
 
         # finally view the clusters on a map
@@ -413,7 +421,7 @@ class KMeansWorkflow(RadioCarbonWorkflow):
     def run_kmeans(self):
         self.construct_pipeline()
         self.construct_features()
-        self.get_n_clusters()
+        self.check_n_clusters()
 
         # set the number of clusters of the KMeans object
         kmeans = self.pipe['clusterer']['kmeans']
@@ -612,7 +620,7 @@ class KMeansWorkflow(RadioCarbonWorkflow):
             yn = input("[>] Evaluate clustering metrics? (y/n): ")
             self.metrics_mode = (yn == 'y')
 
-    def get_n_clusters(self):
+    def check_n_clusters(self):
         try:
             self.n_clusters = int(self.config['k-means']['n_clusters'])
         except (KeyError, ValueError):
