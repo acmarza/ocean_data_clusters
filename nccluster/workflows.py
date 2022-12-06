@@ -265,8 +265,8 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
             self.n_clusters = int(self.config['timeseries']['n_clusters'])
         except (KeyError, ValueError):
             print("[!] You have not specified the number of clusters to use")
-            self.n_clusters = int(input("[>] Enter number of clusters for",
-                                        "timeseries k-means: "))
+            self.n_clusters = int(input("[>] Enter number of clusters for \
+                                        timeseries k-means: "))
 
     def get_model_save_path(self):
         # get the path of the pickle save file from config or interactively
@@ -341,7 +341,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         # convert to array of labels and reshape into 2D for map
         labels_flat = np.ma.masked_array(self.df['labels'])
         _, _, y, x = self.shape_original
-        labels_shaped = np.reshape(labels_flat, [x, y])
+        labels_shaped = np.reshape(labels_flat, [y, x])
 
         # finally view the clusters on a map
         clusters_fig = plt.figure()
