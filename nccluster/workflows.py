@@ -38,11 +38,11 @@ class Workflow:
             self.config.read(self.config_path)
             print(f"[i] Read config: {self.config_path}")
         except FileNotFoundError:
-            print('[i] Config file not passed via commandline')
+            print('[!] Config file not passed via commandline')
 
     def get_nc_files(self):
-        # load data from file,
-        # asking user to specify a path if not provided in config
+        # load netCDF data from file,
+        # asking user to specify the path(s) if not provided in config
         try:
             self.nc_files = self.config['default']['nc_files']
         except (NameError, KeyError):
@@ -53,6 +53,7 @@ class Workflow:
         print(f"[i] NetCDF file(s): {self.nc_files}")
 
     def load_ds(self):
+        # load in data, optionally limiting analysis to a subset of variables
         print("[i] Loading data")
         self.ds = nc.DataSet(self.nc_files)
         try:
@@ -74,12 +75,16 @@ class Workflow:
         print("[!] No preprocessing routine defined")
 
     def run(self):
-        print("[!] Nothing to run. Did you forget to override run() method?")
+        print("[!] Nothing to run. Did you forget to override self.run()?")
 
 
 class RadioCarbonWorkflow(Workflow):
 
     def preprocess_ds(self):
+        # for computing radiocarbon ages, will use nctoolkit's DataSet.assign,
+        # however this will require knowing the variable names in advance;
+        # to avoid confusion, rename the variables used in this computation
+        # to something simple and consistent
         print("[i] Preprocessing data")
         self.construct_rename_dict(['dc14', 'dic', 'di14c'])
         self.rename_vars()
@@ -94,7 +99,7 @@ class RadioCarbonWorkflow(Workflow):
             self.compute_local_age()
 
     def construct_rename_dict(self, vars):
-        # get the name of the Delta14C variable in dataset
+        # get the name of each variable as it appears in the dataset
         # from config or interactively
         self.rename_dict = {}
         for var in vars:
@@ -126,12 +131,14 @@ class RadioCarbonWorkflow(Workflow):
                                         (Cambridge=8267, Libby=8033): "))
 
     def compute_local_age(self):
+        # using mean radiocarbon lifetime and dc14
         self.ds.assign(local_age=lambda x:
                        -self.mean_radio_life*log((1000+x.dc14)/1000))
         print("[i] Converted dc14 to age",
               f"using mean radioC lifetime {self.mean_radio_life}")
 
     def compute_dc14(self):
+        # from dic and di14c
         self.ds.assign(dc14=lambda x:
                        (x.di14c/x.dic-1)*1000)
         self.ds.run()
@@ -141,15 +148,21 @@ class RadioCarbonWorkflow(Workflow):
 class TimeseriesWorkflowBase(RadioCarbonWorkflow):
     def __init__(self, config_path):
         print("[i] Starting timeseries analysis workflow")
+
+        # call the parent init
         RadioCarbonWorkflow.__init__(self, config_path)
+
+        # extend parent init by computing and reading in additional attributes
         self.get_ts_array()
         self.get_plot_all_ts_bool()
 
     def run(self):
+        # this base class simply plots all the timeseries if asked to
         if self.plot_all_ts_bool:
             self.plot_all_ts()
 
     def get_ts_array(self):
+        # some data manipulation to cast it into a useful form
         ds_tmp = self.ds.copy()
         ds_tmp.subset(variable='local_age')
         age_xr = ds_tmp.to_xarray()
@@ -160,6 +173,8 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
         self.age_array = age_array
         # produce an array containing the R-age time series at each grid point
         t, z, y, x = self.shape_original = age_array.shape
+
+        # the result is an array of timeseries
         self.ts_array = np.reshape(age_array[:, 0], [t, x*y]).T
 
     def get_plot_all_ts_bool(self):
@@ -174,6 +189,7 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
 
     def plot_all_ts(self):
         # plot evolution of every grid point over time
+        # i.e. plot all the timeseries on one figure
         fig = plt.figure()
         ax = fig.add_subplot()
         for ts in tqdm(self.ts_array,
@@ -187,9 +203,14 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
 class CorrelationWorkflow(TimeseriesWorkflowBase):
 
     def __init__(self, config_path):
+        # call parent init
         TimeseriesWorkflowBase.__init__(self, config_path)
 
+        # extend parent init by sorting out whether we need to use
+        # p-values and savefiles
         self.get_pvalues_bool()
+
+        # keyword arguments to be passed to CorrelationViewer
         self.kwargs = {
             'volume':  self.age_array,
             'title': "R-ages",
@@ -202,7 +223,10 @@ class CorrelationWorkflow(TimeseriesWorkflowBase):
             self.kwargs['pval_mat_file'] = self.pval_mat_file
 
     def run(self):
+        # run parent workflow (timeseries plot)
         TimeseriesWorkflowBase.run(self)
+
+        # initialise and show CorrelationViewer
         self.corrviewer = CorrelationViewer(**self.kwargs)
         plt.show()
 
@@ -216,6 +240,7 @@ class CorrelationWorkflow(TimeseriesWorkflowBase):
             self.pvalues = (yn == 'y')
 
     def get_corr_mat_file(self):
+        # get the savefile path for the correlation matrix
         try:
             self.corr_mat_file = self.config['correlation']['corr_mat_file']
         except (KeyError, NameError):
@@ -225,6 +250,7 @@ class CorrelationWorkflow(TimeseriesWorkflowBase):
             )
 
     def get_pval_mat_file(self):
+        # get the savefile path for the p-value matrix
         try:
             self.pval_mat_file = self.config['correlation']['pval_mat_file']
         except (KeyError, NameError):
@@ -236,18 +262,26 @@ class CorrelationWorkflow(TimeseriesWorkflowBase):
 
 class TSClusteringWorkflow(TimeseriesWorkflowBase):
     def __init__(self, config_path):
+        # run the parent init
         TimeseriesWorkflowBase.__init__(self, config_path)
+
+        # compute and read additional attributes
         self.get_ts()
         self.get_n_clusters()
         self.get_model_save_path()
 
     def run(self):
+        # run the parent workflow (plotting all timeseries)
         TimeseriesWorkflowBase.run(self)
+
+        # read model from file or train a new one
         try:
             self.read_model_save_file()
         except FileNotFoundError:
             self.train_new_model()
             self.save_model()
+
+        # plot and show results
         self.plot_ts_clusters()
         self.map_clusters()
         plt.show()
@@ -261,6 +295,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         self.ts = to_time_series_dataset(ts)
 
     def get_n_clusters(self):
+        # get the number of clusters for the KMeans model
         try:
             self.n_clusters = int(self.config['timeseries']['n_clusters'])
         except (KeyError, ValueError):
@@ -279,6 +314,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
             )
 
     def read_model_save_file(self):
+        # load in the trained model
         with open(self.model_save_path, 'rb') as file:
             self.km = pickle.load(file)
             print(f"[i] Read in {self.model_save_path}")

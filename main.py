@@ -14,6 +14,7 @@ parser.add_argument("--method", "-m", required=True,
                     )
 args = parser.parse_args()
 
+# depending on chosen method, run appropriate workflow
 if args.method == 'km':
     km_workflow = KMeansWorkflow(args.config)
     km_workflow.run()
