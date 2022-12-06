@@ -23,44 +23,59 @@ from nccluster.corrviewer import CorrelationViewer
 class Workflow:
 
     def __init__(self, config_path=None):
-
         self.config_path = config_path
+        self.__read_config_file()
+        self.__get_nc_files()
+        self.__load_ds()
+        self._preprocess_ds()
 
-        self.read_config_file()
-        self.get_nc_files()
-        self.load_ds()
-        self.preprocess_ds()
-
-    def read_config_file(self):
+    def __read_config_file(self):
         # parse config file if present
+        self.config = configparser.ConfigParser()
         try:
-            self.config = configparser.ConfigParser()
             self.config.read(self.config_path)
             print(f"[i] Read config: {self.config_path}")
         except FileNotFoundError:
             print('[!] Config file not passed via commandline')
 
-    def get_nc_files(self):
-        # load netCDF data from file,
-        # asking user to specify the path(s) if not provided in config
+    def _get_config_string(self, section, field,
+                           missing_msg="[!] Missing field in config",
+                           input_msg="[>] Please enter value: ",
+                           confirm_msg="[i] Got value: ",
+                           isbool=False):
         try:
-            self.nc_files = self.config['default']['nc_files']
+            value = self.config[section][field]
         except (NameError, KeyError):
-            print('[i] Data file path not provided')
-            self.nc_files = input(
-                "[>] Please type the path of the netCDF file to use: ")
-        self.nc_files = self.nc_files.split(",")
-        print(f"[i] NetCDF file(s): {self.nc_files}")
+            print(missing_msg)
+            value = input(input_msg)
+            if isbool:
+                value = int(value.lower() == 'y')
+            self.config[section][field] = value
+        print(confirm_msg + value)
 
-    def load_ds(self):
-        # load in data, optionally limiting analysis to a subset of variables
+    def __get_nc_files(self):
+        self._get_config_string(
+            'default', 'nc_files',
+            missing_msg='[i] Data file path not provided',
+            input_msg='[>] Please type the path of the netCDF file to use: ',
+            confirm_msg='[i] NetCDF file(s): '
+        )
+
+    def __load_ds(self):
         print("[i] Loading data")
-        self.ds = nc.DataSet(self.nc_files)
+
+        # get a list of file paths and create the DataSet object
+        nc_files = self.config['default']['nc_files'].split(",")
+        self.ds = nc.DataSet(nc_files)
+
+        # optionally limit analysis to a subset of variables
         try:
             subset = self.config['default']['subset'].split(",")
             self.ds.subset(variable=subset)
         except (NameError, KeyError):
             pass
+
+        # merge datasets if multiple files specified in config
         try:
             self.ds.merge()
         except Exception:
@@ -71,7 +86,7 @@ class Workflow:
                   "datasets externally.")
             exit()
 
-    def preprocess_ds(self):
+    def _preprocess_ds(self):
         print("[!] No preprocessing routine defined")
 
     def run(self):
@@ -80,67 +95,68 @@ class Workflow:
 
 class RadioCarbonWorkflow(Workflow):
 
-    def preprocess_ds(self):
+    def _preprocess_ds(self):
         # for computing radiocarbon ages, will use nctoolkit's DataSet.assign,
         # however this will require knowing the variable names in advance;
         # to avoid confusion, rename the variables used in this computation
         # to something simple and consistent
         print("[i] Preprocessing data")
-        self.construct_rename_dict(['dc14', 'dic', 'di14c'])
-        self.rename_vars()
+        self.__construct_rename_dict(['dc14', 'dic', 'di14c'])
+        self.__rename_vars()
 
         if 'dic' in self.ds.variables and\
                 'di14c' in self.ds.variables and\
                 'dc14' not in self.ds.variables:
-            self.compute_dc14()
+            self.__compute_dc14()
 
         if 'dc14' in self.ds.variables:
-            self.get_mean_radiocarbon_lifetime()
-            self.compute_local_age()
+            self.__get_mean_radiocarbon_lifetime()
+            self.__compute_local_age()
 
-    def construct_rename_dict(self, vars):
+    def __construct_rename_dict(self, vars):
         # get the name of each variable as it appears in the dataset
         # from config or interactively
-        self.rename_dict = {}
+        self.__rename_dict = {}
         for var in vars:
             try:
-                self.rename_dict[var] = self.config['radiocarbon'][var]
+                self.__rename_dict[var] = self.config['radiocarbon'][var]
             except NameError:
                 print(f"[!] Name of the {var} variable was not provided")
-                self.rename_dict[var] = input("[>] Enter {var} variable name \
-                                        as it appears in the dataset: ")
+                self.__rename_dict[var] = input(
+                    "[>] Enter {var} variable name as it appears in dataset: ")
             except KeyError:
                 pass
 
-    def rename_vars(self):
+    def __rename_vars(self):
         # rename variables to be used in calculations for easy reference
-        for key, value in self.rename_dict.items():
+        for key, value in self.__rename_dict.items():
             self.ds.rename({value: key})
             print(f"[i] Renamed variable {value} to {key}")
+
+        # apply changes now rather than later to avoid variable not found errs
         self.ds.run()
 
-    def get_mean_radiocarbon_lifetime(self):
-        # get the mean radiocarbon lifetime from config or interactively
-        try:
-            self.mean_radio_life =\
-                int(self.config['radiocarbon']['mean_radiocarbon_lifetime'])
-        except (NameError, KeyError):
-            print("[!] Mean lifetime of radiocarbon was not provided")
-            self.mean_radio_life = int(input(
-                "[>] Enter mean radiocarbon lifetime \
-                                        (Cambridge=8267, Libby=8033): "))
+    def __get_mean_radiocarbon_lifetime(self):
+        self._get_config_string(
+            'radiocarbon', 'mean_radiocarbon_lifetime',
+            missing_msg="[!] Mean lifetime of radiocarbon was not provided",
+            input_msg="[>] Enter mean radiocarbon lifetime \
+                                        (Cambridge=8267, Libby=8033): ",
+            confirm_msg="[i] Mean lifetime of radiocarbon: ")
 
-    def compute_local_age(self):
+    def __compute_local_age(self):
         # using mean radiocarbon lifetime and dc14
+        mean_radio_life =\
+            self.config['radiocarbon'].getint('mean_radiocarbon_lifetime')
         self.ds.assign(local_age=lambda x:
-                       -self.mean_radio_life*log((1000+x.dc14)/1000))
-        print("[i] Converted dc14 to age",
-              f"using mean radioC lifetime {self.mean_radio_life}")
+                       -mean_radio_life*log((1000+x.dc14)/1000))
+        print("[i] Converted dc14 to age")
 
-    def compute_dc14(self):
+    def __compute_dc14(self):
         # from dic and di14c
         self.ds.assign(dc14=lambda x:
                        (x.di14c/x.dic-1)*1000)
+        # apply changes now rather than later to avoid variable not found errs
         self.ds.run()
         print("[i] Computed dc14 from di14c and dic")
 
@@ -162,7 +178,7 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
             self.plot_all_ts()
 
     def get_ts_array(self):
-        # some data manipulation to cast it into a useful form
+        # some  manipulation to isolate age data and cast it into a useful form
         ds_tmp = self.ds.copy()
         ds_tmp.subset(variable='local_age')
         age_xr = ds_tmp.to_xarray()
