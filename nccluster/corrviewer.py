@@ -352,7 +352,7 @@ class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
         evolutions = np.reshape(self.surface_slices, [t, x*y]).T
 
         # try reading correlation and p-value matrices from file
-        if pvalues:
+        if int(pvalues):
             try:
                 pval_mat = np.load(pval_mat_file)
                 print(f"[i] Read in {pval_mat_file}")

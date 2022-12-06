@@ -25,9 +25,11 @@ class Workflow:
     def __init__(self, config_path=None):
         self.config_path = config_path
         self.__read_config_file()
-        self.__get_nc_files()
+        self.__check_nc_files()
         self.__load_ds()
+
         self._preprocess_ds()
+        self._init_remaining_attrs()
 
     def __read_config_file(self):
         # parse config file if present
@@ -38,11 +40,11 @@ class Workflow:
         except FileNotFoundError:
             print('[!] Config file not passed via commandline')
 
-    def _get_config_string(self, section, field,
-                           missing_msg="[!] Missing field in config",
-                           input_msg="[>] Please enter value: ",
-                           confirm_msg="[i] Got value: ",
-                           isbool=False):
+    def _check_config_string(self, section, field,
+                             missing_msg="[!] Missing field in config",
+                             input_msg="[>] Please enter value: ",
+                             confirm_msg="[i] Got value: ",
+                             isbool=False):
         try:
             value = self.config[section][field]
         except (NameError, KeyError):
@@ -53,8 +55,8 @@ class Workflow:
             self.config[section][field] = value
         print(confirm_msg + value)
 
-    def __get_nc_files(self):
-        self._get_config_string(
+    def __check_nc_files(self):
+        self._check_config_string(
             'default', 'nc_files',
             missing_msg='[i] Data file path not provided',
             input_msg='[>] Please type the path of the netCDF file to use: ',
@@ -87,7 +89,10 @@ class Workflow:
             exit()
 
     def _preprocess_ds(self):
-        print("[!] No preprocessing routine defined")
+        print("[i] No preprocessing routine defined")
+
+    def _init_remaining_attrs(self):
+        print("[i] All attributes have been initialized")
 
     def run(self):
         print("[!] Nothing to run. Did you forget to override self.run()?")
@@ -110,7 +115,7 @@ class RadioCarbonWorkflow(Workflow):
             self.__compute_dc14()
 
         if 'dc14' in self.ds.variables:
-            self.__get_mean_radiocarbon_lifetime()
+            self.__check_mean_radiocarbon_lifetime()
             self.__compute_local_age()
 
     def __construct_rename_dict(self, vars):
@@ -136,8 +141,8 @@ class RadioCarbonWorkflow(Workflow):
         # apply changes now rather than later to avoid variable not found errs
         self.ds.run()
 
-    def __get_mean_radiocarbon_lifetime(self):
-        self._get_config_string(
+    def __check_mean_radiocarbon_lifetime(self):
+        self._check_config_string(
             'radiocarbon', 'mean_radiocarbon_lifetime',
             missing_msg="[!] Mean lifetime of radiocarbon was not provided",
             input_msg="[>] Enter mean radiocarbon lifetime \
@@ -162,53 +167,55 @@ class RadioCarbonWorkflow(Workflow):
 
 
 class TimeseriesWorkflowBase(RadioCarbonWorkflow):
-    def __init__(self, config_path):
-        print("[i] Starting timeseries analysis workflow")
 
-        # call the parent init
-        RadioCarbonWorkflow.__init__(self, config_path)
-
-        # extend parent init by computing and reading in additional attributes
-        self.get_ts_array()
-        self.get_plot_all_ts_bool()
+    def _init_remaining_attrs(self):
+        self.__get_age_array()
+        self.__check_plot_all_ts_bool()
 
     def run(self):
         # this base class simply plots all the timeseries if asked to
-        if self.plot_all_ts_bool:
+        if self.config['timeseries'].getboolean('plot_all_ts'):
             self.plot_all_ts()
 
-    def get_ts_array(self):
+    def __get_age_array(self):
         # some  manipulation to isolate age data and cast it into a useful form
+        # make a copy of the original dataset to safely subset to one variable
         ds_tmp = self.ds.copy()
         ds_tmp.subset(variable='local_age')
+
+        # convert to xarray and extract the age numpy array
         age_xr = ds_tmp.to_xarray()
         age_array = age_xr['local_age'].__array__()
+
         # offset ages to make more sense (else they'd be negative)
         min_age = np.nanmin(age_array)
         age_array -= min_age
         self.age_array = age_array
-        # produce an array containing the R-age time series at each grid point
-        t, z, y, x = self.shape_original = age_array.shape
 
-        # the result is an array of timeseries
-        self.ts_array = np.reshape(age_array[:, 0], [t, x*y]).T
-
-    def get_plot_all_ts_bool(self):
-        # find out from config or interactively whether to show
-        # all time series on one plot
-        try:
-            self.plot_all_ts_bool =\
-                self.config['timeseries'].getboolean('plot_all_ts')
-        except (NameError, KeyError):
-            yn = input("[>] Show a plot of all the R-age timeseries? (y/n): ")
-            self.plot_all_ts_bool = (yn == 'y')
+    def __check_plot_all_ts_bool(self):
+        self._check_config_string(
+            'timeseries', 'plot_all_ts',
+            missing_msg='[!] You have not specified whether to\
+            show a plot of all the R-age timeseries',
+            input_msg='[>] Show a plot of all the R-age timeseries? (y/n): ',
+            confirm_msg='[i] Plot all timeseries bool: ',
+            isbool=True
+        )
 
     def plot_all_ts(self):
         # plot evolution of every grid point over time
         # i.e. plot all the timeseries on one figure
         fig = plt.figure()
         ax = fig.add_subplot()
-        for ts in tqdm(self.ts_array,
+
+        # age_array.shape = (t, z, y, x)
+        # ts_array = (n, t) at z = 0
+        ts_array = self.age_array[:, 0]
+        t, y, x = ts_array.shape
+        ts_array = np.reshape(ts_array, (t, x*y)).T
+
+        # plot each of the x*y timeseries
+        for ts in tqdm(ts_array,
                        desc="[i] Plotting combined time series"):
             ax.plot(range(0, len(ts)), ts)
         ax.set_xlabel('time step')
@@ -218,62 +225,52 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
 
 class CorrelationWorkflow(TimeseriesWorkflowBase):
 
-    def __init__(self, config_path):
-        # call parent init
-        TimeseriesWorkflowBase.__init__(self, config_path)
+    def _init_remaining_attrs(self):
 
-        # extend parent init by sorting out whether we need to use
-        # p-values and savefiles
-        self.get_pvalues_bool()
+        TimeseriesWorkflowBase._init_remaining_attrs(self)
 
-        # keyword arguments to be passed to CorrelationViewer
-        self.kwargs = {
-            'volume':  self.age_array,
-            'title': "R-ages",
-            'pvalues': self.pvalues
-        }
-        if self.pvalues:
-            self.get_corr_mat_file()
-            self.get_corr_mat_file()
-            self.kwargs['corr_mat_file'] = self.corr_mat_file
-            self.kwargs['pval_mat_file'] = self.pval_mat_file
+        self.__check_pvalues_bool()
+        if self.config['correlation']['pvalues']:
+            self.__check_corr_mat_file()
+            self.__check_pval_mat_file()
 
     def run(self):
         # run parent workflow (timeseries plot)
         TimeseriesWorkflowBase.run(self)
 
+        # keyword arguments to be passed to CorrelationViewer
+        kwargs = self.config['correlation']
+
         # initialise and show CorrelationViewer
-        self.corrviewer = CorrelationViewer(**self.kwargs)
+        self.corrviewer = CorrelationViewer(self.age_array, 'R-ages', **kwargs)
         plt.show()
 
-    def get_pvalues_bool(self):
-        # find out whether to mask using p-values, from config or interactively
-        try:
-            self.pvalues = self.config['correlation'].getboolean('pvalues')
-        except (NameError, KeyError):
-            yn = input("[>] Mask out grid points with insignificant \
-                    ( p > 0.05 ) correlation? (y/n): ")
-            self.pvalues = (yn == 'y')
+    def __check_pvalues_bool(self):
+        self._check_config_string(
+            'correlation', 'pvalues',
+            missing_msg="[!] You have not specified the p-values boolean.",
+            input_msg="[>] Mask out grid points with insignificant \
+                    ( p > 0.05 ) correlation? (y/n): ",
+            confirm_msg="[i] P-values boolean: "
+        )
 
-    def get_corr_mat_file(self):
-        # get the savefile path for the correlation matrix
-        try:
-            self.corr_mat_file = self.config['correlation']['corr_mat_file']
-        except (KeyError, NameError):
-            print("[!] Correlation matrix save file not provided")
-            self.corr_mat_file = input(
-                "[>] Enter file path to save/read correlation matrix now: "
-            )
+    def __check_corr_mat_file(self):
+        self._check_config_string(
+            'correlation', 'corr_mat_file',
+            missing_msg="[!] Correlation matrix save file not provided",
+            input_msg="[>] Enter file path to\
+            save/read correlation matrix now: ",
+            confirm_msg='[i] Correlation matrix savefile: '
+        )
 
-    def get_pval_mat_file(self):
-        # get the savefile path for the p-value matrix
-        try:
-            self.pval_mat_file = self.config['correlation']['pval_mat_file']
-        except (KeyError, NameError):
-            print("[!] P-value matrix save file not provided")
-            self.pval_mat_file = input(
-                "[>] Enter file path to save/read p-value matrix now: "
-            )
+    def __check_pval_mat_file(self):
+        self._check_config_string(
+            'correlation', 'pval_mat_file',
+            missing_msg="[!] P-value matrix save file not provided",
+            input_msg="[>] Enter file path to\
+            save/read p-value matrix now: ",
+            confirm_msg='[i] P-value matrix savefile: '
+        )
 
 
 class TSClusteringWorkflow(TimeseriesWorkflowBase):
