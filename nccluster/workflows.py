@@ -41,25 +41,26 @@ class Workflow:
         self.config.read(self.config_path)
         print(f"[i] Using config: {self.config_path}")
 
-    def _check_config_field(self, section, field,
-                            missing_msg="[!] Missing field in config",
-                            input_msg="[>] Please enter value: ",
-                            confirm_msg="[i] Got value: ",
-                            isbool=False):
+    def _check_config_option(self, section, option,
+                             missing_msg="[!] Missing option in config",
+                             input_msg="[>] Please enter value: ",
+                             confirm_msg="[i] Got value: ",
+                             isbool=False):
         try:
-            value = self.config[section][field]
+            value = self.config[section][option]
         except (NameError, KeyError):
             print(missing_msg)
             value = input(input_msg)
-            if isbool:
-                value = int(value.lower() == 'y')
             if not self.config.has_section(section):
                 self.config.add_section(section)
-            self.config[section][field] = value
+
+            if isbool:
+                value = str(value.lower() == 'y')
+            self.config[section][option] = value
         print(confirm_msg + value)
 
     def __check_nc_files(self):
-        self._check_config_field(
+        self._check_config_option(
             'default', 'nc_files',
             missing_msg='[i] Data file path not provided',
             input_msg='[>] Please type the path of the netCDF file to use: ',
@@ -117,10 +118,20 @@ class Workflow:
                 print(f"{i}. {var}")
 
     def __offer_save_config(self):
-        yn = input("[>] Save current configuration to file? (y/n): ")
-        if yn == 'y':
-            with open(self.config_path, 'w') as file:
-                self.config.write(file)
+
+        # will only ask to save if a new options is added to config that's
+        # not already in the config file
+        original_config = configparser.ConfigParser()
+        original_config.read(self.config_path)
+
+        for section in dict(self.config.items()).keys():
+            for option in dict(self.config[section]).keys():
+                if not original_config.has_option(section, option):
+                    yn = input("[>] Save current config to file? (y/n): ")
+                    if yn == 'y':
+                        with open(self.config_path, 'w') as file:
+                            self.config.write(file)
+                    break
 
 
 class RadioCarbonWorkflow(Workflow):
@@ -167,7 +178,7 @@ class RadioCarbonWorkflow(Workflow):
         self.ds.run()
 
     def __check_mean_radiocarbon_lifetime(self):
-        self._check_config_field(
+        self._check_config_option(
             'radiocarbon', 'mean_radiocarbon_lifetime',
             missing_msg="[!] Mean lifetime of radiocarbon was not provided",
             input_msg="[>] Enter mean radiocarbon lifetime \
@@ -218,7 +229,7 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
         self.age_array = age_array
 
     def __check_plot_all_ts_bool(self):
-        self._check_config_field(
+        self._check_config_option(
             'timeseries', 'plot_all_ts',
             missing_msg='[!] You have not specified whether to\
             show a plot of all the R-age timeseries',
@@ -286,7 +297,7 @@ class CorrelationWorkflow(TimeseriesWorkflowBase):
         plt.show()
 
     def __check_pvalues_bool(self):
-        self._check_config_field(
+        self._check_config_option(
             'correlation', 'pvalues',
             missing_msg="[!] You have not specified the p-values boolean.",
             input_msg="[>] Mask out grid points with insignificant \
@@ -295,7 +306,7 @@ class CorrelationWorkflow(TimeseriesWorkflowBase):
         )
 
     def __check_corr_mat_file(self):
-        self._check_config_field(
+        self._check_config_option(
             'correlation', 'corr_mat_file',
             missing_msg="[!] Correlation matrix save file not provided",
             input_msg="[>] Enter file path to save/read correlation matrix: ",
@@ -303,7 +314,7 @@ class CorrelationWorkflow(TimeseriesWorkflowBase):
         )
 
     def __check_pval_mat_file(self):
-        self._check_config_field(
+        self._check_config_option(
             'correlation', 'pval_mat_file',
             missing_msg="[!] P-value matrix save file not provided",
             input_msg="[>] Enter file path to save/read p-value matrix : ",
@@ -348,7 +359,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
 
     def __check_model_save_path(self):
 
-        self._check_config_field(
+        self._check_config_option(
             'timeseries', 'pickle',
             missing_msg="[!] Model save file not provided",
             input_msg="[>] Enter a file path to save/read pickled model now: ",
@@ -362,7 +373,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         print("[i] Read in model")
 
     def __check_n_clusters(self):
-        self._check_config_field(
+        self._check_config_option(
             'timeseries', 'n_clusters',
             missing_msg="[!] You have not specified the number of clusters.",
             input_msg="[>] Enter number of clusters for timeseries k-means: ",
@@ -521,7 +532,7 @@ class KMeansWorkflowBase(Workflow):
             ])
 
     def __check_n_init(self):
-        self._check_config_field(
+        self._check_config_option(
             'k-means', 'n_init',
             missing_msg="[!] You have not specified n_init.",
             input_msg="[>] Type n_init (default = 10): ",
@@ -529,7 +540,7 @@ class KMeansWorkflowBase(Workflow):
         )
 
     def __check_max_iter(self):
-        self._check_config_field(
+        self._check_config_option(
             'k-means', 'max_iter',
             missing_msg="[!] You have not specified max_iter.",
             input_msg="[>] Type max_iter (default = 300): ",
@@ -584,7 +595,7 @@ class KMeansMetricsWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
         self.__check_max_clusters()
 
     def __check_max_clusters(self):
-        self._check_config_field(
+        self._check_config_option(
             'k-means', 'max_clusters',
             missing_msg="[!] You have not specified \
             the maximum number of clusters",
@@ -660,7 +671,7 @@ class KMeansWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
         self.__append_labels_to_df()
 
     def __check_palette(self):
-        self._check_config_field(
+        self._check_config_option(
             'k-means', 'palette',
             missing_msg="[!] You have not specified a palette for the viewer",
             input_msg="[>] Choose a palette (e.g. rainbow|tab10|viridis): ",
@@ -668,7 +679,7 @@ class KMeansWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
         )
 
     def __check_n_clusters(self):
-        self._check_config_field(
+        self._check_config_option(
             'k-means', 'n_clusters',
             missing_msg="[!] You have not specified n_clusters",
             input_msg="[>] Enter number of clusters to use for k-means: ",

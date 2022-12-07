@@ -5,7 +5,8 @@ from nccluster.workflows import TSClusteringWorkflow
 
 # parse commandline arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("--config", "-c", help="file to read configuration from,\
+parser.add_argument("--config", "-c", required=True,
+                    help="file to read configuration from,\
                      if parameters not supplied interactively")
 parser.add_argument("--method", "-m", required=True,
                     help=" which method to use to analyse\
