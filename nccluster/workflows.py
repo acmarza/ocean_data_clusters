@@ -359,7 +359,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         # load in the trained model
         with open(self.config['timeseries']['pickle'], 'rb') as file:
             self.km = pickle.load(file)
-            print("[i] Read in model")
+        print("[i] Read in model")
 
     def __check_n_clusters(self):
         self._check_config_field(
@@ -372,7 +372,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
     def __train_new_model(self):
         # initialise model
         self.km = TimeSeriesKMeans(
-            n_clusters=self.config['timeseries']['n_clusters'],
+            n_clusters=self.config['timeseries'].getint('n_clusters'),
             metric='euclidean',
             max_iter=10,
             n_jobs=-1
@@ -578,7 +578,7 @@ class KMeansWorkflowBase(Workflow):
 
 
 class KMeansMetricsWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
-# WORK IN PROGRESS NOT FUNCTIONAL
+    # WORK IN PROGRESS NOT FUNCTIONAL
     def _init_remaining_attrs(self):
         KMeansWorkflowBase._init_remaining_attrs()
         self.__check_max_clusters()
