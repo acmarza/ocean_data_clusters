@@ -97,6 +97,26 @@ class Workflow:
     def run(self):
         print("[!] Nothing to run. Did you forget to override self.run()?")
 
+    def list_plottable_vars(self):
+        # get an alphabetical list of plottable variables
+        plottable_vars = self.ds.variables
+        df = self.ds.contents
+
+        # list plottable variables for the user to inspect
+        for i, var in enumerate(plottable_vars):
+            # print in a nice format if possible
+            try:
+                long_name = df.loc[df['variable'] == var].long_name.values[0]
+                print(f"{i}. {var}\n\t{long_name}")
+            except Exception:
+                print(f"{i}. {var}")
+
+    def __offer_save_config(self):
+
+        yn = input("[>] Save current configuration to file? (y/n): ")
+        if yn == 'y':
+            self.config.write(self.config_path)
+
 
 class RadioCarbonWorkflow(Workflow):
 
@@ -299,6 +319,20 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         # run the parent workflow (plotting all timeseries)
         TimeseriesWorkflowBase.run(self)
 
+        # get the model with label assignments and barycenters
+        self.get_trained_model()
+
+        # plot and show results
+        self.plot_ts_clusters()
+        self.map_clusters()
+
+        plt.show()
+
+    def __get_ts(self):
+        self.ts = self._make_ts()
+
+    def get_trained_model(self):
+
         # read model from file or train a new one
         try:
             self.__read_model_save_file()
@@ -306,22 +340,6 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
             self.__check_n_clusters()
             self.__train_new_model()
             self.__save_model()
-
-        # plot and show results
-        self.plot_ts_clusters()
-        self.map_clusters()
-        plt.show()
-
-    def __get_ts(self):
-        self.ts = self._make_ts()
-
-    def __check_n_clusters(self):
-        self._check_config_field(
-            'timeseries', 'n_clusters',
-            missing_msg="[!] You have not specified the number of clusters.",
-            input_msg="[>] Enter number of clusters for timeseries k-means: ",
-            confirm_msg='[i] n_clusters: '
-        )
 
     def __check_model_save_path(self):
 
@@ -337,6 +355,14 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         with open(self.config['timeseries']['pickle'], 'rb') as file:
             self.km = pickle.load(file)
             print("[i] Read in model")
+
+    def __check_n_clusters(self):
+        self._check_config_field(
+            'timeseries', 'n_clusters',
+            missing_msg="[!] You have not specified the number of clusters.",
+            input_msg="[>] Enter number of clusters for timeseries k-means: ",
+            confirm_msg='[i] n_clusters: '
+        )
 
     def __train_new_model(self):
         # initialise model
@@ -407,90 +433,45 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         clusters_fig.show()
 
 
-class KMeansWorkflow(RadioCarbonWorkflow):
+class KMeansWorkflowBase(Workflow):
 
-    def run(self):
-        self.get_selected_vars()
+    def _init_remaining_attrs(self):
+        self.__get_selected_vars()
+        self.__check_n_init()
+        self.__check_max_iter()
+        self.__get_pipeline()
+        self.__get_features()
 
-        self.get_metrics_mode_bool()
-        if self.metrics_mode:
-            self.run_metrics()
-        else:
-            self.run_kmeans()
-
-    def run_kmeans(self):
-        self.construct_pipeline()
-        self.construct_features()
-        self.check_n_clusters()
-
-        # set the number of clusters of the KMeans object
-        kmeans = self.pipe['clusterer']['kmeans']
-        kmeans.n_clusters = self.n_clusters
-
-        # fit the model and adjust the labels to start from 1
-        print("[i] Running k-means, please stand by...")
-        self.pipe.fit(self.features)
-        self.labels = kmeans.labels_
-        self.labels += 1
-
-        # now to reshape the 1D array of labels into a plottable 2D form
-        # first add the labels as a new column to our pandas dataframe
-        self.df.loc[
-            self.df.index.isin(self.df.dropna().index),
-            'labels'
-        ] = self.labels
-
-        # then retrieve the labels column including missing vals as a 1D array
-        labels_flat = np.ma.masked_array(self.df['labels'])
-
-        # then reshape to the original 3D/fD form
-        labels_shaped = np.reshape(labels_flat, self.shape_original)
-
-        # map out the clusters each with its own color
-        plot_title = f"Kmeans results with {self.n_clusters} clusters"
-        plot_title += f" based on {self.selected_vars}"
-
-        # read color palette from file or default to rainbow
-        try:
-            palette = config['default']['palette']
-        except (NameError, KeyError):
-            palette = 'rainbow'
-        # cmap = cm.get_cmap(palette)
-
-        # view the labels in 3D
-        MultiSliceViewer(labels_shaped, title=plot_title, colorbar=False,
-                         legend=True, cmap=palette).show()
-
-    def get_selected_vars(self):
+    def __get_selected_vars(self):
         # get parameters to run k-means for from file, or interactively
         try:
             selected_vars = self.config['k-means']['selected_vars'].split(",")
         except KeyError:
             # let the user view and plot available variables
             self.list_plottable_vars()
-            self.interactive_var_plot()
+            self.__interactive_var_plot()
             # finally ask user which vars to use
             selected_vars = input(
                 "\n[>] Type the variables to use in kmeans " +
-                "separated by commas: ")
+                "separated by commas (no whitespaces): ")
             selected_vars = selected_vars.split(",")
 
         print(f"[i] Selected variables for k-means: {selected_vars}")
         self.selected_vars = selected_vars
 
-    def list_plottable_vars(self):
-        # get an alphabetical list of plottable variables
-        plottable_vars = self.ds.variables
-        df = self.ds.contents
+    def __interactive_var_plot(self):
+        try:
+            while True:
+                # get the name of the variable the user wants to plot
+                var_to_plot = input(
+                    "[>] Type a variable to plot or Ctrl+C to"
+                    " proceed to choosing k-means parameters: "
+                )
+                self.plot_var(var_to_plot)
 
-        # list plottable variables for the user to inspect
-        for i, var in enumerate(plottable_vars):
-            # print in a nice format if possible
-            try:
-                long_name = df.loc[df['variable'] == var].long_name.values[0]
-                print(f"{i}. {var}\n\t{long_name}")
-            except Exception:
-                print(f"{i}. {var}")
+        except KeyboardInterrupt:
+            # Ctrl+C to exit loop
+            pass
 
     def plot_var(self, var_to_plot):
         try:
@@ -513,56 +494,100 @@ class KMeansWorkflow(RadioCarbonWorkflow):
         except IndexError:
             print(f"[!] {var_to_plot} not found; check spelling")
 
-    def interactive_var_plot(self):
-        try:
-            while True:
-                # get the name of the variable the user wants to plot
-                var_to_plot = input(
-                    "[>] Type a variable to plot or Ctrl+C to"
-                    " proceed to choosing k-means parameters: "
-                )
-                self.plot_var(var_to_plot)
-
-        except KeyboardInterrupt:
-            # Ctrl+C to exit loop
-            pass
-
-    def construct_pipeline(self):
+    def __get_pipeline(self):
         # construct the data processing pipeline including scaling and k-means
         preprocessor = Pipeline(
             [("scaler", MinMaxScaler())]
         )
 
-        try:
-            n_init = int(self.config['k-means']['n_init'])
-        except (KeyError, NameError):
-            # will not ask but use the kmeans default
-            n_init = 10
-        try:
-            max_iter = int(self.config['k-means']['max_iter'])
-        except (KeyError, NameError):
-            # will not ask but use the kmeans default
-            max_iter = 300
-        print("[i] K-means hyperparameters: ",
-              f"n_init = {n_init}, max_iter = {max_iter}")
-        clusterer = Pipeline([("kmeans", KMeans(
-                        init="k-means++",
-                        n_init=n_init,
-                        max_iter=max_iter
-                    )
-                )])
+        clusterer = Pipeline(
+            [("kmeans",
+              KMeans(
+                  init="k-means++",
+                  n_init=self.config['k-means'].getint('n_init'),
+                  max_iter=self.config['k-means'].getint('max_iter')
+              )
+              )]
+        )
 
         self.pipe = Pipeline([
                 ("preprocessor", preprocessor),
                 ("clusterer", clusterer)
             ])
 
-    def run_metrics(self):
+    def __check_n_init(self):
+        self._check_config_field(
+            'k-means', 'n_init',
+            missing_msg="[!] You have not specified n_init.",
+            input_msg="[>] Type n_init (default = 10): ",
+            confirm_msg="[i] Proceeding with n_init = "
+        )
 
-        self.construct_pipeline()
-        self.construct_features()
-        self.get_max_clusters()
+    def __check_max_iter(self):
+        self._check_config_field(
+            'k-means', 'max_iter',
+            missing_msg="[!] You have not specified max_iter.",
+            input_msg="[>] Type max_iter (default = 300): ",
+            confirm_msg="[i] Proceeding with max_iter = "
+        )
 
+    def __get_features(self):
+        # some data manipulation to cast it in a useful xarray form
+        ds_tmp = self.ds.copy()
+        ds_tmp.subset(variables=self.selected_vars)
+        nc_data = ds_tmp.to_xarray()
+
+        # find out if any of the selected vars are 2D
+        selected_vars_dims = [len(nc_data[var].shape)
+                              for var in self.selected_vars]
+        n_spatial_dims = min(selected_vars_dims) - 1
+
+        # to do: make this more concise
+        # restrict analysis to ocean surface if some parameters are 2D
+        if n_spatial_dims == 2:
+            # obtain the data arrays,
+            # taking care to slice 3D+time arrays at the surface
+            selected_vars_arrays = [nc_data[var].__array__()
+                                    if len(nc_data[var].shape) == 3
+                                    else nc_data[var].__array__()[:, 0, :, :]
+                                    for var in self.selected_vars]
+        else:
+            # if all data has depth information, use as is
+            selected_vars_arrays = [nc_data[var].__array__()
+                                    for var in self.selected_vars]
+
+        # take note of the original array shapes before flattening
+        self.shape_original = selected_vars_arrays[0].shape
+        selected_vars_flat = [array.flatten()
+                              for array in selected_vars_arrays]
+
+        # construct the feature vector with missing data
+        features = np.ma.masked_array(selected_vars_flat).T
+
+        # convert to pandas dataframe to drop NaN entries, and back to array
+        self.df = pd.DataFrame(features)
+        self.df.columns = self.selected_vars
+
+    def _make_features(self):
+        return np.array(self.df.dropna())
+
+
+class KMeansMetricsWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
+
+    def _init_remaining_attrs(self):
+        KMeansWorkflowBase._init_remaining_attrs()
+        self.__check_max_clusters()
+
+    def __check_max_clusters(self):
+        self._check_config_field(
+            'k-means', 'max_clusters',
+            missing_msg="[!] You have not specified \
+            the maximum number of clusters",
+            input_msg="[>] Max clusters for metrics: ",
+            confirm_msg="[i] Proceeding with max_clusters = "
+        )
+
+    def run(self):
         # iterate over different cluster sizes to find "optimal" k
         print("[i] Now computing clustering metrics")
         # initialise empty arrrays for our four tests in search of optimal k
@@ -610,67 +635,69 @@ class KMeansWorkflow(RadioCarbonWorkflow):
 
         plt.show()
 
-    def get_metrics_mode_bool(self):
 
-        try:
-            self.metrics_mode =\
-                self.config['k-means'].getboolean('metrics_mode')
-        except (KeyError, NameError):
-            print("[!] You have not specified whether to run in metrics mode")
-            yn = input("[>] Evaluate clustering metrics? (y/n): ")
-            self.metrics_mode = (yn == 'y')
+class KMeansWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
 
-    def check_n_clusters(self):
+    def _init_remaining_attrs(self):
+
+        KMeansWorkflowBase._init_remaining_attrs(self)
+        self.__check_palette()
+        self.__check_n_clusters()
+        self.__set_n_clusters()
+
+    def run(self):
+        self.get_kmeans_labels()
+        self.map_clusters()
+
+    def get_kmeans_labels(self):
+        print("[i] Running k-means, please stand by...")
+        self.pipe.fit(self._make_features())
+        self.__append_labels_to_df()
+
+    def __check_palette(self):
+        self._check_config_field(
+            'k-means', 'palette',
+            missing_msg="[!] You have not specified a palette for the viewer",
+            input_msg="[>] Choose a palette (e.g. rainbow|tab10|viridis): ",
+            confirm_msg="[i] Proceeding with color palette: "
+        )
+
+    def __check_n_clusters(self):
         try:
             self.n_clusters = int(self.config['k-means']['n_clusters'])
         except (KeyError, ValueError):
             print("[!] You have not specified the number of clusters to use")
             self.n_clusters = int(input("[>] Enter number of clusters: "))
 
-    def get_max_clusters(self):
-        try:
-            max_clusters = int(self.config['k-means']['max_clusters'])
-        except KeyError:
-            print("[!] You have not specified the maximum number of clusters")
-            max_clusters = int(input("[>] Max clusters for metrics: "))
-        self.max_clusters = max_clusters
+    def __set_n_clusters(self):
+        # set the number of clusters of the KMeans object
+        self.pipe['clusterer']['kmeans'].n_clusters =\
+            self.config['k-means'].getint('n_clusters')
 
-    def construct_features(self):
-        # some data manipulation to cast it in a useful xarray form
-        selected_vars = self.selected_vars
-        ds_tmp = self.ds.copy()
-        ds_tmp.subset(variables=selected_vars)
-        nc_data = ds_tmp.to_xarray()
+    def __append_labels_to_df(self):
+        # add the labels as a new column to our pandas dataframe
+        labels = self.pipe['clusterer']['kmeans'].labels_
+        self.df.loc[
+            self.df.index.isin(self.df.dropna().index),
+            'labels'
+        ] = labels
 
-        selected_vars_dims = [len(nc_data[var].shape)
-                              for var in selected_vars]
-        n_spatial_dims = min(selected_vars_dims) - 1
+    def map_clusters(self):
+        # retrieve the labels column including missing vals as a 1D array
+        labels_flat = np.ma.masked_array(self.df['labels'])
 
-        # restrict analysis to ocean surface if some parameters are x-y only
-        if n_spatial_dims == 2:
-            # obtain the data arrays,
-            # taking care to slice 4D ones at the surface
-            selected_vars_arrays = [nc_data[var].__array__()
-                                    if len(nc_data[var].shape) == 3
-                                    else nc_data[var].__array__()[:, 0, :, :]
-                                    for var in selected_vars]
-        else:
-            # if all data has depth information, use as is
-            selected_vars_arrays = [nc_data[var].__array__()
-                                    for var in selected_vars]
+        # then reshape to the original 3D/2D form
+        labels_shaped = np.reshape(labels_flat, self.shape_original)
 
-        # take note of the original array shapes before flattening
-        self.shape_original = selected_vars_arrays[0].shape
-        selected_vars_flat = [array.flatten()
-                              for array in selected_vars_arrays]
+        # put some useful info in plot title
+        plot_title = f'Kmeans results based on {self.selected_vars}'
 
-        # construct the feature vector with missing data
-        features = np.ma.masked_array(selected_vars_flat).T
+        # colors specified in config
+        palette = self.config['k-means']['palette']
 
-        # convert to pandas dataframe to drop NaN entries, and back to array
-        self.df = pd.DataFrame(features)
-        self.df.columns = selected_vars
-        self.features = np.array(self.df.dropna())
+        # view the labels in 3D
+        MultiSliceViewer(volume=labels_shaped, title=plot_title,
+                         colorbar=False, legend=True, cmap=palette).show()
 
 # labels_colors = cmap(np.linspace(0, 1, num=n_clusters))
 
