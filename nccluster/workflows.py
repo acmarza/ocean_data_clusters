@@ -1,3 +1,4 @@
+import atexit
 import configparser
 # import matplotlib.cm as cm
 import matplotlib.pyplot as plt
@@ -22,9 +23,12 @@ from nccluster.corrviewer import CorrelationViewer
 
 class Workflow:
 
-    def __init__(self, config_path=None):
+    def __init__(self, config_path):
         self.config_path = config_path
         self.__read_config_file()
+
+        atexit.register(self.__offer_save_config)
+
         self.__check_nc_files()
         self.__load_ds()
 
@@ -34,11 +38,8 @@ class Workflow:
     def __read_config_file(self):
         # parse config file if present
         self.config = configparser.ConfigParser()
-        try:
-            self.config.read(self.config_path)
-            print(f"[i] Read config: {self.config_path}")
-        except FileNotFoundError:
-            print('[!] Config file not passed via commandline')
+        self.config.read(self.config_path)
+        print(f"[i] Using config: {self.config_path}")
 
     def _check_config_field(self, section, field,
                             missing_msg="[!] Missing field in config",
@@ -52,6 +53,8 @@ class Workflow:
             value = input(input_msg)
             if isbool:
                 value = int(value.lower() == 'y')
+            if not self.config.has_section(section):
+                self.config.add_section(section)
             self.config[section][field] = value
         print(confirm_msg + value)
 
@@ -73,12 +76,14 @@ class Workflow:
         # optionally limit analysis to a subset of variables
         try:
             subset = self.config['default']['subset'].split(",")
+            print("[i] Subsetting data")
             self.ds.subset(variable=subset)
         except (NameError, KeyError):
             pass
 
         # merge datasets if multiple files specified in config
         try:
+            print("[i] Merging datasets")
             self.ds.merge()
         except Exception:
             print("[fatal] You have specified multiple netCDF files to use",
@@ -112,10 +117,10 @@ class Workflow:
                 print(f"{i}. {var}")
 
     def __offer_save_config(self):
-
         yn = input("[>] Save current configuration to file? (y/n): ")
         if yn == 'y':
-            self.config.write(self.config_path)
+            with open(self.config_path, 'w') as file:
+                self.config.write(file)
 
 
 class RadioCarbonWorkflow(Workflow):
@@ -663,11 +668,12 @@ class KMeansWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
         )
 
     def __check_n_clusters(self):
-        try:
-            self.n_clusters = int(self.config['k-means']['n_clusters'])
-        except (KeyError, ValueError):
-            print("[!] You have not specified the number of clusters to use")
-            self.n_clusters = int(input("[>] Enter number of clusters: "))
+        self._check_config_field(
+            'k-means', 'n_clusters',
+            missing_msg="[!] You have not specified n_clusters",
+            input_msg="[>] Enter number of clusters to use for k-means: ",
+            confirm_msg="[i] Proceeding with n_clusters = "
+            )
 
     def __set_n_clusters(self):
         # set the number of clusters of the KMeans object
