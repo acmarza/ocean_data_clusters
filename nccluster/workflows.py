@@ -578,7 +578,7 @@ class KMeansWorkflowBase(Workflow):
 
 
 class KMeansMetricsWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
-
+# WORK IN PROGRESS NOT FUNCTIONAL
     def _init_remaining_attrs(self):
         KMeansWorkflowBase._init_remaining_attrs()
         self.__check_max_clusters()
