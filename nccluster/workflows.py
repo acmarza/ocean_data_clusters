@@ -706,52 +706,6 @@ class KMeansWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
         MultiSliceViewer(volume=labels_shaped, title=plot_title,
                          colorbar=False, legend=True, cmap=palette).show()
 
-
-class ClusterMatcher:
-
-    def labels_from_arrays(self, labels_1, labels_2):
-        self.labels_1 = labels_1
-        self.labels_2 = labels_2
-
-    def match(self):
-
-        labels_1_flat = self.labels_1.flatten()
-        labels_2_flat = self.labels_2.flatten()
-
-        n_clusters = np.nanmax(self.labels_1)
-
-        array_of_sets_1 = []
-        array_of_sets_2 = []
-
-        for cluster in range(0, n_clusters):
-            array_of_sets_1[cluster] = set(np.where(labels_1_flat == cluster))
-            array_of_sets_2[cluster] = set(np.where(labels_2_flat == cluster))
-
-        set_sizes_1 = [len(my_set) for my_set in array_of_sets_1]
-        set_sizes_2 = [len(my_set) for my_set in array_of_sets_2]
-
-        print(set_sizes_1)
-
-        lut1 = set_sizes_1.argsort()
-        lut2 = set_sizes_2.argsort()
-
-        array_of_sets_1 = array_of_sets_1[lut1]
-        array_of_sets_2 = array_of_sets_2[lut2]
-
-        print(set_sizes_1)
-
-    def load_labels(self, save_path_1, save_path_2):
-        with np.load(save_path_1) as npz:
-            self.labels_1 = np.ma.MaskedArray(**npz)
-        with np.load(save_path_2) as npz:
-            self.labels_2 = np.ma.MaskedArray(**npz)
-
-    def save_labels(self, save_path_1, save_path_2):
-        np.savez_compressed(save_path_1,
-                            data=self.labels_1.data, mask=self.labels_1.mask)
-        np.savez_compressed(save_path_2,
-                            data=self.labels_2.data, mask=self.labels_2.mask)
-
 # labels_colors = cmap(np.linspace(0, 1, num=n_clusters))
 
 # rescale the centroids back to original data ranges
