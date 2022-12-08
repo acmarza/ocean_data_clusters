@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 import nctoolkit as nc
 import numpy as np
 import pandas as pd
-import pickle
 
 from math import log
 from sklearn.cluster import KMeans
@@ -13,9 +12,10 @@ from sklearn.metrics import calinski_harabasz_score, davies_bouldin_score
 #                            silhouette_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import MinMaxScaler
+from sktime.clustering.k_medoids import TimeSeriesKMedoids
 from tqdm import tqdm
 from tslearn.clustering import TimeSeriesKMeans
-from tslearn.utils import to_time_series_dataset
+from tslearn.utils import to_time_series_dataset, to_sktime_dataset
 
 from nccluster.multisliceviewer import MultiSliceViewer
 from nccluster.corrviewer import CorrelationViewer
@@ -127,7 +127,7 @@ class Workflow:
         for section in dict(self.config.items()).keys():
             for option in dict(self.config[section]).keys():
                 if not original_config.has_option(section, option):
-                    yn = input("[>] Save current config to file? (y/n): ")
+                    yn = input("[>] Save modified config to file? (y/n): ")
                     if yn == 'y':
                         with open(self.config_path, 'w') as file:
                             self.config.write(file)
@@ -329,14 +329,15 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
 
         # compute and read additional attributes
         self.__get_ts()
-        self.__check_model_save_path()
+        self.__check_n_clusters()
+        self.__check_clustering_method()
 
     def run(self):
         # run the parent workflow (plotting all timeseries)
         TimeseriesWorkflowBase.run(self)
 
         # get the model with label assignments and barycenters
-        self.get_trained_model()
+        self.fit_model()
 
         # plot and show results
         self.plot_ts_clusters()
@@ -347,31 +348,6 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
     def __get_ts(self):
         self.ts = self._make_ts()
 
-    def get_trained_model(self):
-
-        # read model from file or train a new one
-        try:
-            self.__read_model_save_file()
-        except FileNotFoundError:
-            self.__check_n_clusters()
-            self.__train_new_model()
-            self.__save_model()
-
-    def __check_model_save_path(self):
-
-        self._check_config_option(
-            'timeseries', 'pickle',
-            missing_msg="[!] Model save file not provided",
-            input_msg="[>] Enter a file path to save/read pickled model now: ",
-            confirm_msg="[i] Model save file: "
-        )
-
-    def __read_model_save_file(self):
-        # load in the trained model
-        with open(self.config['timeseries']['pickle'], 'rb') as file:
-            self.km = pickle.load(file)
-        print("[i] Read in model")
-
     def __check_n_clusters(self):
         self._check_config_option(
             'timeseries', 'n_clusters',
@@ -380,24 +356,35 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
             confirm_msg='[i] n_clusters: '
         )
 
-    def __train_new_model(self):
-        # initialise model
-        self.km = TimeSeriesKMeans(
-            n_clusters=self.config['timeseries'].getint('n_clusters'),
-            metric='euclidean',
-            max_iter=10,
-            n_jobs=-1
+    def __check_clustering_method(self):
+        self._check_config_option(
+            'timeseries', 'method',
+            missing_msg="[!] You have not specified a clustering method.",
+            input_msg="[>] Clustering method (k-means/k-medoids): ",
+            confirm_msg="[i] Proceeding with clustering method = "
         )
-        print("[i] Fitting k-means model, please stand by")
+
+    def fit_model(self):
+        # initialise model
+        kwargs = {
+            'n_clusters': self.config['timeseries'].getint('n_clusters'),
+            'metric': 'euclidean',
+            'max_iter': 10,
+            'n_jobs': -1
+        }
+
+        if self.config['timeseries']['method'] == 'k-means' or 'kmeans':
+            self.km = TimeSeriesKMeans(**kwargs)
+            dataset = self.ts
+
+        elif self.config['timeseries']['method'] == 'k-medoids' or 'kmedoids':
+            self.km = TimeSeriesKMedoids(**kwargs)
+            dataset = to_sktime_dataset(self.ts)
+
+        print("[i] Fitting model, please stand by")
 
         # actually fit the model
-        self.km.fit(self.ts)
-
-    def __save_model(self):
-        # write k-means model object to file
-        with open(self.config['timeseries']['pickle'], 'wb') as file:
-            pickle.dump(self.km, file)
-            print("[i] Saved newly trained model")
+        self.km.fit(dataset)
 
     def plot_ts_clusters(self):
         # get predictions for our timeseries from trained model
