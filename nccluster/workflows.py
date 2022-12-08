@@ -131,7 +131,7 @@ class Workflow:
                     if yn == 'y':
                         with open(self.config_path, 'w') as file:
                             self.config.write(file)
-                    break
+                    return
 
 
 class RadioCarbonWorkflow(Workflow):
@@ -374,25 +374,25 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         }
 
         if self.config['timeseries']['method'] == 'k-means' or 'kmeans':
-            self.km = TimeSeriesKMeans(**kwargs)
+            self.model = TimeSeriesKMeans(**kwargs)
             dataset = self.ts
 
         elif self.config['timeseries']['method'] == 'k-medoids' or 'kmedoids':
-            self.km = TimeSeriesKMedoids(**kwargs)
+            self.model = TimeSeriesKMedoids(**kwargs)
             dataset = to_sktime_dataset(self.ts)
 
         print("[i] Fitting model, please stand by")
 
         # actually fit the model
-        self.km.fit(dataset)
+        self.model.fit(dataset)
 
     def plot_ts_clusters(self):
         # get predictions for our timeseries from trained model
         # i.e. to which cluster each timeseries belongs
         # consider changing this to labels
-        # y_pred = self.km.predict(self.ts)
-        y_pred = self.km.labels_
-        n_clusters = self.km.n_clusters
+        # y_pred = self.model.predict(self.ts)
+        y_pred = self.model.labels_
+        n_clusters = self.model.n_clusters
 
         # plot each cluster members and their barycenter
         # initialise figure
@@ -408,7 +408,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
                 # plot with a thin transparent line
                 plt.plot(xx.ravel(), "k-", alpha=.2)
             # plot the cluster barycenter
-            plt.plot(self.km.cluster_centers_[yi].ravel(), "r-")
+            plt.plot(self.model.cluster_centers_[yi].ravel(), "r-")
             # label the cluster
             plt.text(0.55, 0.85, 'Cluster %d' % (yi + 1),
                      transform=plt.gca().transAxes)
@@ -418,22 +418,25 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         clusters_fig.show()
 
     def map_clusters(self):
-        # assign predicted labels to the original dataframe
-        df = self._make_df()
-        df.loc[
-            df.index.isin(df.dropna().index),
-            'labels'] = self.km.labels_
-
-        # convert to array of labels and reshape into 2D for map
-        labels_flat = np.ma.masked_array(df['labels'])
-        _, _, y, x = self.age_array.shape
-        labels_shaped = np.reshape(labels_flat, [y, x])
+        labels_shaped = self.make_labels_shaped()
 
         # finally view the clusters on a map
         clusters_fig = plt.figure()
         ax = clusters_fig.add_subplot()
         ax.imshow(labels_shaped, origin='lower')
         clusters_fig.show()
+
+    def make_labels_shaped(self):
+        df = self._make_df()
+        df.loc[
+            df.index.isin(df.dropna().index),
+            'labels'] = self.model.labels_
+
+        # convert to array of labels and reshape into 2D for map
+        labels_flat = np.ma.masked_array(df['labels'])
+        _, _, y, x = self.age_array.shape
+        labels_shaped = np.reshape(labels_flat, [y, x])
+        return labels_shaped
 
 
 class KMeansWorkflowBase(Workflow):
@@ -702,6 +705,52 @@ class KMeansWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
         # view the labels in 3D
         MultiSliceViewer(volume=labels_shaped, title=plot_title,
                          colorbar=False, legend=True, cmap=palette).show()
+
+
+class ClusterMatcher:
+
+    def labels_from_arrays(self, labels_1, labels_2):
+        self.labels_1 = labels_1
+        self.labels_2 = labels_2
+
+    def match(self):
+
+        labels_1_flat = self.labels_1.flatten()
+        labels_2_flat = self.labels_2.flatten()
+
+        n_clusters = np.nanmax(self.labels_1)
+
+        array_of_sets_1 = []
+        array_of_sets_2 = []
+
+        for cluster in range(0, n_clusters):
+            array_of_sets_1[cluster] = set(np.where(labels_1_flat == cluster))
+            array_of_sets_2[cluster] = set(np.where(labels_2_flat == cluster))
+
+        set_sizes_1 = [len(my_set) for my_set in array_of_sets_1]
+        set_sizes_2 = [len(my_set) for my_set in array_of_sets_2]
+
+        print(set_sizes_1)
+
+        lut1 = set_sizes_1.argsort()
+        lut2 = set_sizes_2.argsort()
+
+        array_of_sets_1 = array_of_sets_1[lut1]
+        array_of_sets_2 = array_of_sets_2[lut2]
+
+        print(set_sizes_1)
+
+    def load_labels(self, save_path_1, save_path_2):
+        with np.load(save_path_1) as npz:
+            self.labels_1 = np.ma.MaskedArray(**npz)
+        with np.load(save_path_2) as npz:
+            self.labels_2 = np.ma.MaskedArray(**npz)
+
+    def save_labels(self, save_path_1, save_path_2):
+        np.savez_compressed(save_path_1,
+                            data=self.labels_1.data, mask=self.labels_1.mask)
+        np.savez_compressed(save_path_2,
+                            data=self.labels_2.data, mask=self.labels_2.mask)
 
 # labels_colors = cmap(np.linspace(0, 1, num=n_clusters))
 
