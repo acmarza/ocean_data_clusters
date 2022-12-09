@@ -233,7 +233,7 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
 
         # convert to xarray and extract the age numpy array
         age_xr = ds_tmp.to_xarray()
-        age_array = age_xr['local_age'].__array__()
+        age_array = age_xr['local_age'].values
 
         self.age_array = age_array
 
@@ -494,7 +494,7 @@ class KMeansWorkflowBase(Workflow):
             ds_tmp = self.ds.copy()
             ds_tmp.subset(variables=var_to_plot)
             var_xr = ds_tmp.to_xarray()
-            data_to_plot = var_xr[var_to_plot].__array__()
+            data_to_plot = var_xr[var_to_plot].values
 
             # add more info in plot title if possible
             try:
@@ -562,13 +562,13 @@ class KMeansWorkflowBase(Workflow):
         if n_spatial_dims == 2:
             # obtain the data arrays,
             # taking care to slice 3D+time arrays at the surface
-            selected_vars_arrays = [nc_data[var].__array__()
+            selected_vars_arrays = [nc_data[var].values
                                     if len(nc_data[var].shape) == 3
-                                    else nc_data[var].__array__()[:, 0, :, :]
+                                    else nc_data[var].values[:, 0, :, :]
                                     for var in self.selected_vars]
         else:
             # if all data has depth information, use as is
-            selected_vars_arrays = [nc_data[var].__array__()
+            selected_vars_arrays = [nc_data[var].values
                                     for var in self.selected_vars]
 
         # take note of the original array shapes before flattening
