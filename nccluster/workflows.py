@@ -20,6 +20,8 @@ from tslearn.utils import to_time_series_dataset, to_sktime_dataset
 from nccluster.multisliceviewer import MultiSliceViewer
 from nccluster.corrviewer import CorrelationViewer
 
+nc.options(lazy=False)
+
 
 class Workflow:
 
@@ -127,11 +129,19 @@ class Workflow:
         for section in dict(self.config.items()).keys():
             for option in dict(self.config[section]).keys():
                 if not original_config.has_option(section, option):
+                    print(f"[i] The script is about to exit but you have\
+                          unsaved changes to {self.config_path}.")
                     yn = input("[>] Save modified config to file? (y/n): ")
                     if yn == 'y':
                         with open(self.config_path, 'w') as file:
                             self.config.write(file)
                     return
+
+    def regrid_to_ds(self, target_ds):
+        self.ds.regrid(target_ds)
+
+        # features and timeseries need to be re-created for new grid
+        self._init_remaining_attrs()
 
 
 class RadioCarbonWorkflow(Workflow):
@@ -175,9 +185,6 @@ class RadioCarbonWorkflow(Workflow):
             self.ds.rename({value: key})
             print(f"[i] Renamed variable {value} to {key}")
 
-        # apply changes now rather than later to avoid variable not found errs
-        self.ds.run()
-
     def __check_mean_radiocarbon_lifetime(self):
         self._check_config_option(
             'radiocarbon', 'mean_radiocarbon_lifetime',
@@ -202,15 +209,12 @@ class RadioCarbonWorkflow(Workflow):
         self.ds.assign(local_age=lambda x: -mean_radio_life*log(
                            (x.dc14/1000 + 1)/(atm_dc14/1000 + 1))
                        )
-        self.ds.run()
         print("[i] Converted dc14 to age")
 
     def __compute_dc14(self):
         # from dic and di14c
         self.ds.assign(dc14=lambda x:
                        (x.di14c/x.dic-1)*1000)
-        # apply changes now rather than later to avoid variable not found errs
-        self.ds.run()
         print("[i] Computed dc14 from di14c and dic")
 
 
@@ -433,7 +437,6 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         clusters_fig = plt.figure()
         ax = clusters_fig.add_subplot()
         ax.imshow(labels_shaped, origin='lower')
-        clusters_fig.show()
 
     def make_labels_shaped(self):
         df = self._make_df()
