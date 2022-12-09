@@ -31,7 +31,9 @@ class ClusterMatcher:
 
         # reorder lists to have biggest sets first
         array_of_sets_1.sort(key=lambda x: -len(x))
-        # array_of_sets_2.sort(key=lambda x: -len(x))
+        array_of_sets_2.sort(key=lambda x: -len(x))
+
+        # quantify overlap between pairs of sets between the two label versions
         overlap_matrix = np.zeros((n_clusters, n_clusters))
         for i, idx_set in enumerate(array_of_sets_1):
             for j, cf_set in enumerate(array_of_sets_2):
@@ -40,13 +42,28 @@ class ClusterMatcher:
                 mismatch = sym_diff_size / union_size
                 overlap = 1 - mismatch
                 print(f'{i} vs. {j}: {overlap:.2%}')
-                overlap_matrix[i, j] = overlap
+                overlap_matrix[i, j] = int(100 * overlap)
 
-        translation = []
-        for cluster in range(0, n_clusters):
-            match_idx = overlap_matrix[cluster].argmax()
-            translation.append(match_idx)
-        print(translation)
+        # translation = np.array([(0, 0) for i in range(0, n_clusters)])
+        pairings = []
+
+        for cluster in range(0, n_clusters**2):
+
+            # print(overlap_matrix)
+            # print("")
+            # score = overlap_matrix.max()
+            row, col = np.unravel_index(overlap_matrix.argmax(),
+                                        overlap_matrix.shape)
+            score = overlap_matrix.max()
+            overlap_matrix[row, col] = 0
+            pairings.append((row, col, score))
+
+        translation = np.full(n_clusters, np.nan)
+        for pairing in pairings:
+            print(pairing)
+            row, col, score = pairing
+            if col not in translation:
+                translation[row] = col
 
         for i, idx_set in enumerate(array_of_sets_1):
             for idx in idx_set:
