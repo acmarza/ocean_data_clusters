@@ -191,7 +191,7 @@ class RadioCarbonWorkflow(Workflow):
             'radiocarbon', 'atm_dc14',
             missing_msg="[!] Atmospheric dc14 was not provided",
             input_msg="[>] Type the atmospheric dc14 as integer in per mil: ",
-            confirm_msg="[>] Proceeding with atmospheric dc14 = "
+            confirm_msg="[i] Proceeding with atmospheric dc14 = "
         )
 
     def __compute_local_age(self):
