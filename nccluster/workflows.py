@@ -152,6 +152,7 @@ class RadioCarbonWorkflow(Workflow):
 
         if 'dc14' in self.ds.variables:
             self.__check_mean_radiocarbon_lifetime()
+            self.__check_atm_dc14()
             self.__compute_local_age()
 
     def __construct_rename_dict(self, vars):
@@ -185,12 +186,23 @@ class RadioCarbonWorkflow(Workflow):
                                         (Cambridge=8267, Libby=8033): ",
             confirm_msg="[i] Mean lifetime of radiocarbon: ")
 
+    def __check_atm_dc14(self):
+        self._check_config_option(
+            'radiocarbon', 'atm_dc14',
+            missing_msg="[!] Atmospheric dc14 was not provided",
+            input_msg="[>] Type the atmospheric dc14 as integer in per mil: ",
+            confirm_msg="[>] Proceeding with atmospheric dc14 = "
+        )
+
     def __compute_local_age(self):
         # using mean radiocarbon lifetime and dc14
         mean_radio_life =\
             self.config['radiocarbon'].getint('mean_radiocarbon_lifetime')
-        self.ds.assign(local_age=lambda x:
-                       -mean_radio_life*log((1000+x.dc14)/1000))
+        atm_dc14 = self.config['radiocarbon'].getint('atm_dc14')
+        self.ds.assign(local_age=lambda x: -mean_radio_life*log(
+                           (x.dc14/1000 + 1)/(atm_dc14/1000 + 1))
+                       )
+        self.ds.run()
         print("[i] Converted dc14 to age")
 
     def __compute_dc14(self):
@@ -223,9 +235,6 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
         age_xr = ds_tmp.to_xarray()
         age_array = age_xr['local_age'].__array__()
 
-        # offset ages to make more sense (else they'd be negative)
-        min_age = np.nanmin(age_array)
-        age_array -= min_age
         self.age_array = age_array
 
     def __check_plot_all_ts_bool(self):
@@ -281,7 +290,7 @@ class CorrelationWorkflow(TimeseriesWorkflowBase):
         TimeseriesWorkflowBase._init_remaining_attrs(self)
 
         self.__check_pvalues_bool()
-        if self.config['correlation']['pvalues']:
+        if self.config['correlation'].getboolean('pvalues'):
             self.__check_corr_mat_file()
             self.__check_pval_mat_file()
 
