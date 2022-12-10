@@ -39,7 +39,7 @@ class ClusterMatcher:
                 sym_diff_size = len(idx_set.symmetric_difference(cf_set))
                 mismatch = sym_diff_size / union_size
                 overlap = 1 - mismatch
-                print(f'{i} vs. {j}: {overlap:.2%}')
+                # print(f'{i} vs. {j}: {overlap:.2%}')
                 overlap_matrix[i, j] = overlap
 
         translation = []
@@ -47,6 +47,11 @@ class ClusterMatcher:
             match_idx = overlap_matrix[cluster].argmax()
             translation.append(match_idx)
         print(translation)
+
+        bad_solution = (len(np.unique(translation)) != len(translation))
+        if bad_solution:
+            print("[i] Could not converge on 1:1 equivalence between the maps")
+            return
 
         for i, idx_set in enumerate(array_of_sets_1):
             for idx in idx_set:
