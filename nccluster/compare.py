@@ -39,9 +39,9 @@ class ClusterMatcher:
         pairings_scores = []
         for i, left_set in enumerate(array_of_sets_left):
             for j, right_set in enumerate(array_of_sets_right):
-                sym_diff_size = len(left_set.symmetric_difference(right_set))
+                union_size = len(left_set.union(right_set))
                 intersection_size = len(left_set.intersection(right_set))
-                overlap = intersection_size/sym_diff_size
+                overlap = intersection_size/union_size
                 # print(f'{i} vs. {j}: {overlap:.2%}')
                 pairings_scores.append((i, j, overlap))
 
