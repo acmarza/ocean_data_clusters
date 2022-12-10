@@ -382,7 +382,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         kwargs = {
             'n_clusters': self.config['timeseries'].getint('n_clusters'),
             'metric': 'euclidean',
-            'max_iter': 10,
+            # 'max_iter': 10,
             'n_jobs': -1
         }
 

@@ -4,80 +4,91 @@ import matplotlib.pyplot as plt
 
 class ClusterMatcher:
 
-    def labels_from_arrays(self, labels_1, labels_2):
-        self.labels_1 = labels_1
-        self.labels_2 = labels_2
+    def labels_from_arrays(self, labels_left, labels_right):
+        self.labels_left = labels_left
+        self.labels_right = labels_right
 
     def match_labels(self):
         # flatten labels into 1D array
-        labels_1_flat = self.labels_1.flatten()
-        labels_2_flat = self.labels_2.flatten()
+        labels_left_flat = self.labels_left.flatten()
+        labels_right_flat = self.labels_right.flatten()
 
         # the labels are 0 to n-1
-        n_clusters = int(np.nanmax(self.labels_1)) + 1
-        shape = self.labels_1.shape
+        n_clusters = int(np.nanmax(self.labels_left)) + 1
+        if n_clusters != int(np.nanmax(self.labels_right)) + 1:
+            print("[!] The maps have a different number of clusters")
+            exit()
 
         # initialise empty arrays
-        array_of_sets_1 = []
-        array_of_sets_2 = []
+        array_of_sets_left = []
+        array_of_sets_right = []
 
         # for every cluster (label), get all the indices that have
         # the current label and put them in a set
         for cluster in range(0, n_clusters):
-            (indices_1, ) = np.where(labels_1_flat == cluster)
-            array_of_sets_1.append(set(indices_1))
-            (indices_2, ) = np.where(labels_2_flat == cluster)
-            array_of_sets_2.append(set(indices_2))
+            (indices_1, ) = np.where(labels_left_flat == cluster)
+            array_of_sets_left.append(set(indices_1))
+            (indices_2, ) = np.where(labels_right_flat == cluster)
+            array_of_sets_right.append(set(indices_2))
 
         # reorder lists to have biggest sets first
-        array_of_sets_1.sort(key=lambda x: -len(x))
-        # array_of_sets_2.sort(key=lambda x: -len(x))
-        overlap_matrix = np.zeros((n_clusters, n_clusters))
-        for i, idx_set in enumerate(array_of_sets_1):
-            for j, cf_set in enumerate(array_of_sets_2):
-                union_size = len(idx_set.union(cf_set))
-                sym_diff_size = len(idx_set.symmetric_difference(cf_set))
-                mismatch = sym_diff_size / union_size
-                overlap = 1 - mismatch
+        array_of_sets_left.sort(key=lambda x: -len(x))
+        array_of_sets_right.sort(key=lambda x: -len(x))
+
+        # quantify overlap between pairs of sets between the two label versions
+        pairings_scores = []
+        for i, left_set in enumerate(array_of_sets_left):
+            for j, right_set in enumerate(array_of_sets_right):
+                sym_diff_size = len(left_set.symmetric_difference(right_set))
+                intersection_size = len(left_set.intersection(right_set))
+                overlap = intersection_size/sym_diff_size
                 # print(f'{i} vs. {j}: {overlap:.2%}')
-                overlap_matrix[i, j] = overlap
+                pairings_scores.append((i, j, overlap))
 
-        translation = []
-        for cluster in range(0, n_clusters):
-            match_idx = overlap_matrix[cluster].argmax()
-            translation.append(match_idx)
-        print(translation)
+        # start with the highest overlap scores
+        pairings_scores.sort(reverse=True, key=lambda x: x[2])
 
-        bad_solution = (len(np.unique(translation)) != len(translation))
-        if bad_solution:
-            print("[i] Could not converge on 1:1 equivalence between the maps")
-            return
+        # prepare an empty array to hold the 1:1 matching between
+        # labels on the left and right
+        translation = np.full(n_clusters, np.nan)
 
-        for i, idx_set in enumerate(array_of_sets_1):
-            for idx in idx_set:
-                labels_1_flat[idx] = translation[i]
+        # put the pairings with the highest scores in the translation array
+        # skipping when an entry already exists
+        for pair in pairings_scores:
+            left, right, score = pair
+            if right not in translation and np.isnan(translation[left]):
+                translation[left] = right
 
-        for i, idx_set in enumerate(array_of_sets_2):
-            for idx in idx_set:
-                labels_2_flat[idx] = i
+        # relabel the sets to match based on our translation function
+        for i, left_set in enumerate(array_of_sets_left):
+            for idx in left_set:
+                labels_left_flat[idx] = translation[i]
 
-        self.labels_1 = np.reshape(labels_1_flat, shape)
-        self.labels_2 = np.reshape(labels_2_flat, shape)
+        for i, right_set in enumerate(array_of_sets_right):
+            for idx in right_set:
+                labels_right_flat[idx] = i
+
+        # reshape translated 1D arrays and update attributes
+        shape = self.labels_left.shape
+        self.labels_left = np.reshape(labels_left_flat, shape)
+        self.labels_right = np.reshape(labels_right_flat, shape)
 
     def load_labels(self, save_path_1, save_path_2):
         with np.load(save_path_1) as npz:
-            self.labels_1 = np.ma.MaskedArray(**npz)
+            self.labels_left = np.ma.MaskedArray(**npz)
         with np.load(save_path_2) as npz:
-            self.labels_2 = np.ma.MaskedArray(**npz)
+            self.labels_right = np.ma.MaskedArray(**npz)
 
     def save_labels(self, save_path_1, save_path_2):
         np.savez_compressed(save_path_1,
-                            data=self.labels_1.data, mask=self.labels_1.mask)
+                            data=self.labels_left.data,
+                            mask=self.labels_left.mask)
         np.savez_compressed(save_path_2,
-                            data=self.labels_2.data, mask=self.labels_2.mask)
+                            data=self.labels_right.data,
+                            mask=self.labels_right.mask)
 
     def compare_maps(self):
         fig, (ax1, ax2) = plt.subplots(1, 2)
-        ax1.imshow(self.labels_1, origin='lower')
-        ax2.imshow(self.labels_2, origin='lower')
+        ax1.imshow(self.labels_left, origin='lower')
+        ax2.imshow(self.labels_right, origin='lower')
         plt.show()
