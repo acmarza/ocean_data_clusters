@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import nctoolkit as nc
 import numpy as np
 import pandas as pd
+import xarray as xr
 
 from math import log
 from sklearn.cluster import KMeans
@@ -449,6 +450,22 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         _, _, y, x = self.age_array.shape
         labels_shaped = np.reshape(labels_flat, [y, x])
         return labels_shaped
+
+    def make_labels_data_array(self, long_name):
+        labels_shaped = self.make_labels_shaped()
+        all_coords = self.ds.to_xarray().coords
+        coords = {}
+        for key in all_coords:
+            try:
+                if all_coords[key].axis in ('X', 'Y'):
+                    coords[key] = all_coords[key]
+            except AttributeError:
+                pass
+
+        data_array = xr.DataArray(data=labels_shaped.T,
+                                  coords=coords,
+                                  attrs={'long_name': long_name})
+        return data_array
 
 
 class KMeansWorkflowBase(Workflow):

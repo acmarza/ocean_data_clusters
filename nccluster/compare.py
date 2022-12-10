@@ -1,21 +1,44 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import xarray as xr
+import xesmf as xe
 
 
 class ClusterMatcher:
 
-    def labels_from_arrays(self, labels_left, labels_right):
+    def from_dataarrays(self, labels_left, labels_right):
         self.labels_left = labels_left
         self.labels_right = labels_right
 
+    def regrid_left_to_right(self):
+        print(self.labels_left)
+        print(self.labels_right)
+        regridder = xe.Regridder(self.labels_left,
+                                 self.labels_right,
+                                 'nearest_s2d'
+                                 )
+        print(regridder)
+        self.labels_left = regridder(self.labels_left)
+
+        regridder = xe.Regridder(self.labels_right,
+                                 self.labels_right,
+                                 'nearest_s2d'
+                                 )
+        self.labels_right = regridder(self.labels_right)
+
+    def round_all_gridpoints(self):
+
+        self.labels_left.values = np.rint(self.labels_left.values)
+        self.labels_right.values = np.rint(self.labels_right.values)
+
     def match_labels(self):
         # flatten labels into 1D array
-        labels_left_flat = self.labels_left.flatten()
-        labels_right_flat = self.labels_right.flatten()
+        labels_left_flat = self.labels_left.values.flatten()
+        labels_right_flat = self.labels_right.values.flatten()
 
         # the labels are 0 to n-1
-        n_clusters = int(np.nanmax(self.labels_left)) + 1
-        if n_clusters != int(np.nanmax(self.labels_right)) + 1:
+        n_clusters = int(np.nanmax(self.labels_left.values)) + 1
+        if n_clusters != int(np.nanmax(self.labels_right.values)) + 1:
             print("[!] The maps have a different number of clusters")
             exit()
 
@@ -69,26 +92,23 @@ class ClusterMatcher:
                 labels_right_flat[idx] = i
 
         # reshape translated 1D arrays and update attributes
-        shape = self.labels_left.shape
-        self.labels_left = np.reshape(labels_left_flat, shape)
-        self.labels_right = np.reshape(labels_right_flat, shape)
+        shape = self.labels_left.values.shape
+        self.labels_left.values = np.reshape(labels_left_flat, shape)
+        self.labels_right.values = np.reshape(labels_right_flat, shape)
 
     def load_labels(self, save_path_1, save_path_2):
-        with np.load(save_path_1) as npz:
-            self.labels_left = np.ma.MaskedArray(**npz)
-        with np.load(save_path_2) as npz:
-            self.labels_right = np.ma.MaskedArray(**npz)
+        self.labels_left = xr.open_dataarray(save_path_1)
+        self.labels_right = xr.open_dataarray(save_path_2)
+
+        print(self.labels_left.values.shape)
+        print(self.labels_right.values.shape)
 
     def save_labels(self, save_path_1, save_path_2):
-        np.savez_compressed(save_path_1,
-                            data=self.labels_left.data,
-                            mask=self.labels_left.mask)
-        np.savez_compressed(save_path_2,
-                            data=self.labels_right.data,
-                            mask=self.labels_right.mask)
+        self.labels_left.to_netcdf(save_path_1)
+        self.labels_right.to_netcdf(save_path_2)
 
     def compare_maps(self):
         fig, (ax1, ax2) = plt.subplots(1, 2)
-        ax1.imshow(self.labels_left, origin='lower')
-        ax2.imshow(self.labels_right, origin='lower')
+        ax1.imshow(self.labels_left.values, origin='lower')
+        ax2.imshow(self.labels_right.values, origin='lower')
         plt.show()
