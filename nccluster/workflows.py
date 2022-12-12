@@ -276,7 +276,7 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
 
     def run(self):
         # this base class simply plots all the time series if asked to
-        if self.config['time series'].getboolean('plot_all_ts'):
+        if self.config['timeseries'].getboolean('plot_all_ts'):
             self.plot_all_ts()
 
     def __set_age_array(self):
@@ -292,10 +292,10 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
         self.age_array = age_array
 
     def __check_plot_all_ts_bool(self):
+        missing_msg = '[!] You have not specified whether to show\
+ a plot of all the R-age time series'
         self._check_config_option(
-            'time series', 'plot_all_ts',
-            missing_msg='[!] You have not specified whether to\
-            show a plot of all the R-age time series',
+            'timeseries', 'plot_all_ts', missing_msg=missing_msg,
             input_msg='[>] Show a plot of all the R-age time series? (y/n): ',
             confirm_msg='[i] Plot all time series bool: ',
             isbool=True
@@ -422,7 +422,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
 
     def __check_n_clusters(self):
         self._check_config_option(
-            'time series', 'n_clusters',
+            'timeseries', 'n_clusters',
             missing_msg="[!] You have not specified the number of clusters.",
             input_msg="[>] Enter number of clusters for time series k-means: ",
             confirm_msg='[i] n_clusters: '
@@ -430,7 +430,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
 
     def __check_clustering_method(self):
         self._check_config_option(
-            'time series', 'method',
+            'timeseries', 'method',
             missing_msg="[!] You have not specified a clustering method.",
             input_msg="[>] Clustering method (k-means/k-medoids): ",
             confirm_msg="[i] Proceeding with clustering method = "
@@ -439,17 +439,20 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
     def fit_model(self):
         # define the keyword arguments to pass to the model
         kwargs = {
-            'n_clusters': self.config['time series'].getint('n_clusters'),
-            'metric': 'euclidean',
+            'n_clusters': self.config['timeseries'].getint('n_clusters'),
             # 'max_iter': 10,
-            'n_jobs': -1
+            'verbose': True,
+            'metric': 'euclidean'
+
         }
 
         # initialise model using desired clustering method
-        if self.config['time series']['method'] == 'k-means' or 'kmeans':
+        if self.config['timeseries']['method'] == 'k-means':
+            print("[i] Initialising k-means model")
             self.model = TimeSeriesKMeans(**kwargs)
             dataset = self.ts
-        elif self.config['time series']['method'] == 'k-medoids' or 'kmedoids':
+        elif self.config['timeseries']['method'] == 'k-medoids':
+            print("[i] Initialising k-medoids model")
             self.model = TimeSeriesKMedoids(**kwargs)
             dataset = to_sktime_dataset(self.ts)
 
@@ -509,7 +512,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         labels_shaped = np.reshape(labels_flat, [y, x])
         return labels_shaped
 
-    def make_labels_data_array(self, long_name):
+    def make_labels_data_array(self):
         # get the raw labels array
         labels_shaped = self._make_labels_shaped()
 
