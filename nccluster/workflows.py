@@ -141,10 +141,10 @@ class Workflow:
     def _setters(self):
         print("[i] All attributes have been initialized")
 
-    def regrid_to_ds(self, target_ds):
+    def regrid_to_ds(self, tarset_ds):
         # interpolate/extrapolate the data to fit the grid of a target dataset
-        self.ds.regrid(target_ds)
-        # features and timeseries need to be re-created for new grid
+        self.ds.regrid(tarset_ds)
+        # features and time series need to be re-created for new grid
         self._setters()
 
     def run(self):
@@ -192,7 +192,7 @@ class Workflow:
 
 
 class RadioCarbonWorkflow(Workflow):
-
+    '''Base for workflows involving dc14 and radiocarbon age calculations.'''
     def _preprocess_ds(self):
         # for computing radiocarbon ages, will use nctoolkit's DataSet.assign,
         # however this will require knowing the variable names in advance;
@@ -266,20 +266,20 @@ class RadioCarbonWorkflow(Workflow):
 
 
 class TimeseriesWorkflowBase(RadioCarbonWorkflow):
-
+    '''Base class for workflows involving time series.'''
     def _checkers(self):
         super()._checkers()
         self.__check_plot_all_ts_bool()
 
     def _setters(self):
-        self.__get_age_array()
+        self.__set_age_array()
 
     def run(self):
-        # this base class simply plots all the timeseries if asked to
-        if self.config['timeseries'].getboolean('plot_all_ts'):
+        # this base class simply plots all the time series if asked to
+        if self.config['time series'].getboolean('plot_all_ts'):
             self.plot_all_ts()
 
-    def __get_age_array(self):
+    def __set_age_array(self):
         # some  manipulation to isolate age data and cast it into a useful form
         # make a copy of the original dataset to subset to one variable
         ds_tmp = self.ds.copy()
@@ -293,32 +293,35 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
 
     def __check_plot_all_ts_bool(self):
         self._check_config_option(
-            'timeseries', 'plot_all_ts',
+            'time series', 'plot_all_ts',
             missing_msg='[!] You have not specified whether to\
-            show a plot of all the R-age timeseries',
-            input_msg='[>] Show a plot of all the R-age timeseries? (y/n): ',
-            confirm_msg='[i] Plot all timeseries bool: ',
+            show a plot of all the R-age time series',
+            input_msg='[>] Show a plot of all the R-age time series? (y/n): ',
+            confirm_msg='[i] Plot all time series bool: ',
             isbool=True
         )
 
     def plot_all_ts(self):
         # plot evolution of every grid point over time
-        # i.e. plot all the timeseries on one figure
+        # i.e. plot all the time series on one figure
+        # initialise the figure, axis and get the data to plot
         fig = plt.figure()
         ax = fig.add_subplot()
         ts_array = self._make_ts_array()
 
-        # plot each of the x*y timeseries
+        # plot each time series
         for ts in tqdm(ts_array,
                        desc="[i] Plotting combined time series"):
             ax.plot(range(0, len(ts)), ts)
+
+        # some information
         ax.set_xlabel('time step')
         ax.set_ylabel('age')
         ax.set_title('age over time')
 
     def _make_ts_array(self):
         # remember age_array.shape = (t, z, y, x)
-        # we want ts_array.shape = (n, t) at with n=x*y
+        # we want ts_array.shape = (n, t) at z=0 with n=x*y
         # note the -1 in np.reshape tells it to figure out n on its own
         ts_array = self.age_array[:, 0]
         ts_array = np.reshape(ts_array,
@@ -326,11 +329,13 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
         return ts_array
 
     def _make_df(self):
+        # convenience function to get time series as dataframe
         ts_array = self._make_ts_array()
         df = pd.DataFrame(ts_array)
         return df
 
     def _make_ts(self):
+        # convenience function to get a tslearn-formatted time series array
         df = self._make_df()
         ts_droppedna_array = np.array(df.dropna())
         ts = to_time_series_dataset(ts_droppedna_array)
@@ -338,18 +343,19 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
 
 
 class CorrelationWorkflow(TimeseriesWorkflowBase):
-
+    '''A workflow for visualising correlations between time series at each
+    grid point in the surface ocean.'''
     def _checkers(self):
-
         super()._checkers()
 
+        # only worry about save files if required to use p-values
         self.__check_pvalues_bool()
         if self.config['correlation'].getboolean('pvalues'):
             self.__check_corr_mat_file()
             self.__check_pval_mat_file()
 
     def run(self):
-        # run parent workflow (timeseries plot)
+        # run parent workflow (time series plot)
         TimeseriesWorkflowBase.run(self)
 
         # keyword arguments to be passed to CorrelationViewer
@@ -386,6 +392,8 @@ class CorrelationWorkflow(TimeseriesWorkflowBase):
 
 
 class TSClusteringWorkflow(TimeseriesWorkflowBase):
+    '''A workflow to find clusters in the surface ocean based on the
+    radiocarbon age time series at each grid point.'''
     def _checkers(self):
         super()._checkers()
         self.__check_n_clusters()
@@ -393,10 +401,10 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
 
     def _setters(self):
         super()._setters()
-        self.__get_ts()
+        self.__set_ts()
 
     def run(self):
-        # run the parent workflow (plotting all timeseries)
+        # run the parent workflow (plotting all time series)
         TimeseriesWorkflowBase.run(self)
 
         # get the model with label assignments and barycenters
@@ -408,39 +416,40 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
 
         plt.show()
 
-    def __get_ts(self):
+    def __set_ts(self):
+        # wrapper for setting the time series attribute of this class
         self.ts = self._make_ts()
 
     def __check_n_clusters(self):
         self._check_config_option(
-            'timeseries', 'n_clusters',
+            'time series', 'n_clusters',
             missing_msg="[!] You have not specified the number of clusters.",
-            input_msg="[>] Enter number of clusters for timeseries k-means: ",
+            input_msg="[>] Enter number of clusters for time series k-means: ",
             confirm_msg='[i] n_clusters: '
         )
 
     def __check_clustering_method(self):
         self._check_config_option(
-            'timeseries', 'method',
+            'time series', 'method',
             missing_msg="[!] You have not specified a clustering method.",
             input_msg="[>] Clustering method (k-means/k-medoids): ",
             confirm_msg="[i] Proceeding with clustering method = "
         )
 
     def fit_model(self):
-        # initialise model
+        # define the keyword arguments to pass to the model
         kwargs = {
-            'n_clusters': self.config['timeseries'].getint('n_clusters'),
+            'n_clusters': self.config['time series'].getint('n_clusters'),
             'metric': 'euclidean',
             # 'max_iter': 10,
             'n_jobs': -1
         }
 
-        if self.config['timeseries']['method'] == 'k-means' or 'kmeans':
+        # initialise model using desired clustering method
+        if self.config['time series']['method'] == 'k-means' or 'kmeans':
             self.model = TimeSeriesKMeans(**kwargs)
             dataset = self.ts
-
-        elif self.config['timeseries']['method'] == 'k-medoids' or 'kmedoids':
+        elif self.config['time series']['method'] == 'k-medoids' or 'kmedoids':
             self.model = TimeSeriesKMedoids(**kwargs)
             dataset = to_sktime_dataset(self.ts)
 
@@ -450,10 +459,8 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         self.model.fit(dataset)
 
     def plot_ts_clusters(self):
-        # get predictions for our timeseries from trained model
-        # i.e. to which cluster each timeseries belongs
-        # consider changing this to labels
-        # y_pred = self.model.predict(self.ts)
+        # get predictions for our time series from trained model
+        # i.e. to which cluster each time series belongs
         y_pred = self.model.labels_
         n_clusters = self.model.n_clusters
 
@@ -466,7 +473,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
             # create a subplot in a table with n_cluster rows and 1 column
             # this subplot is number yi+1 because we're counting from 0
             plt.subplot(n_clusters, 1, yi + 1)
-            # for every timeseries that has been assigned label yi
+            # for every time series that has been assigned label yi
             for xx in self.ts[y_pred == yi]:
                 # plot with a thin transparent line
                 plt.plot(xx.ravel(), "k-", alpha=.2)
@@ -481,6 +488,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         clusters_fig.show()
 
     def map_clusters(self):
+        # get the 2D labels array
         labels_shaped = self._make_labels_shaped()
 
         # finally view the clusters on a map
@@ -489,6 +497,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         ax.imshow(labels_shaped, origin='lower')
 
     def _make_labels_shaped(self):
+        # get the timeseries as a dataframe and append labels to non-empty rows
         df = self._make_df()
         df.loc[
             df.index.isin(df.dropna().index),
@@ -501,7 +510,10 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         return labels_shaped
 
     def make_labels_data_array(self, long_name):
+        # get the raw labels array
         labels_shaped = self._make_labels_shaped()
+
+        # copy the coords of the original dataset, but keep only x and y
         all_coords = self.ds.to_xarray().coords
         coords = {}
         for key in all_coords:
@@ -513,9 +525,14 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         # arcane magic to put the coordinates in reverse order
         # because otherwise DataArray expects the transpose of what we have
         coords = dict(reversed(list(coords.items())))
+
+        # create the data array from our labels and
+        # the x-y coords copied from the original dataset
         data_array = xr.DataArray(data=labels_shaped,
                                   coords=coords,
-                                  attrs={'long_name': long_name})
+                                  name='labels',
+                                  attrs={'long_name':
+                                         'time series clustering results'})
         return data_array
 
 
@@ -526,11 +543,11 @@ class KMeansWorkflowBase(Workflow):
         self.__check_max_iter()
 
     def _setters(self):
-        self.__get_selected_vars()
-        self.__get_pipeline()
-        self.__get_features()
+        self.__set_selected_vars()
+        self.__set_pipeline()
+        self.__set_features()
 
-    def __get_selected_vars(self):
+    def __set_selected_vars(self):
         # get parameters to run k-means for from file, or interactively
         try:
             selected_vars = self.config['k-means']['selected_vars'].split(",")
@@ -561,7 +578,7 @@ class KMeansWorkflowBase(Workflow):
             # Ctrl+C to exit loop
             pass
 
-    def __get_pipeline(self):
+    def __set_pipeline(self):
         # construct the data processing pipeline including scaling and k-means
         preprocessor = Pipeline(
             [("scaler", MinMaxScaler())]
@@ -598,7 +615,7 @@ class KMeansWorkflowBase(Workflow):
             confirm_msg="[i] Proceeding with max_iter = "
         )
 
-    def __get_features(self):
+    def __set_features(self):
         # some data manipulation to cast it in a useful xarray form
         ds_tmp = self.ds.copy()
         ds_tmp.subset(variables=self.selected_vars)
@@ -715,10 +732,10 @@ class KMeansWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
         self.__set_n_clusters()
 
     def run(self):
-        self.get_kmeans_labels()
+        self.set_kmeans_labels()
         self.map_clusters()
 
-    def get_kmeans_labels(self):
+    def set_kmeans_labels(self):
         print("[i] Running k-means, please stand by...")
         self.pipe.fit(self._make_features())
         self.__append_labels_to_df()
