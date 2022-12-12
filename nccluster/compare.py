@@ -6,30 +6,30 @@ import xesmf as xe
 
 class ClusterMatcher:
 
-    def from_dataarrays(self, labels_left, labels_right):
+    def labels_from_data_arrays(self, labels_left, labels_right):
         self.labels_left = labels_left
         self.labels_right = labels_right
 
+    def labels_from_file(self, save_path_1, save_path_2):
+        self.labels_left = xr.open_dataarray(save_path_1)
+        self.labels_right = xr.open_dataarray(save_path_2)
+
+    def save_labels(self, save_path_1, save_path_2):
+        self.labels_left.to_netcdf(save_path_1)
+        self.labels_right.to_netcdf(save_path_2)
+
+    def compare_maps(self):
+        fig, (ax1, ax2) = plt.subplots(1, 2)
+        ax1.imshow(self.labels_left.values, origin='lower')
+        ax2.imshow(self.labels_right.values, origin='lower')
+        plt.show()
+
     def regrid_left_to_right(self):
-        print(self.labels_left)
-        print(self.labels_right)
         regridder = xe.Regridder(self.labels_left,
                                  self.labels_right,
                                  'nearest_s2d'
                                  )
-        print(regridder)
         self.labels_left = regridder(self.labels_left)
-
-        regridder = xe.Regridder(self.labels_right,
-                                 self.labels_right,
-                                 'nearest_s2d'
-                                 )
-        self.labels_right = regridder(self.labels_right)
-
-    def round_all_gridpoints(self):
-
-        self.labels_left.values = np.rint(self.labels_left.values)
-        self.labels_right.values = np.rint(self.labels_right.values)
 
     def match_labels(self):
         # flatten labels into 1D array
@@ -95,20 +95,3 @@ class ClusterMatcher:
         shape = self.labels_left.values.shape
         self.labels_left.values = np.reshape(labels_left_flat, shape)
         self.labels_right.values = np.reshape(labels_right_flat, shape)
-
-    def load_labels(self, save_path_1, save_path_2):
-        self.labels_left = xr.open_dataarray(save_path_1)
-        self.labels_right = xr.open_dataarray(save_path_2)
-
-        print(self.labels_left.values.shape)
-        print(self.labels_right.values.shape)
-
-    def save_labels(self, save_path_1, save_path_2):
-        self.labels_left.to_netcdf(save_path_1)
-        self.labels_right.to_netcdf(save_path_2)
-
-    def compare_maps(self):
-        fig, (ax1, ax2) = plt.subplots(1, 2)
-        ax1.imshow(self.labels_left.values, origin='lower')
-        ax2.imshow(self.labels_right.values, origin='lower')
-        plt.show()

@@ -25,41 +25,75 @@ nc.options(lazy=False)
 
 
 class Workflow:
-
+    '''Base class for defining a workflow that operates on a netCDF dataset'''
     def __init__(self, config_path):
+        # save the config_path as an attribute, read config and
+        # be ready to save config changes  when script exits
         self.config_path = config_path
         self.__read_config_file()
-
         atexit.register(self.__offer_save_config)
 
-        self.__check_nc_files()
+        # make sure all required fields are defined in the config
+        # before loading the data from file and applying any preprocessing
+        self._checkers()
         self.__load_ds()
-
         self._preprocess_ds()
-        self._init_remaining_attrs()
+
+        # initialise any other required attributes
+        self._setters()
 
     def __read_config_file(self):
-        # parse config file if present
+        # parse config file
         self.config = configparser.ConfigParser()
         self.config.read(self.config_path)
         print(f"[i] Using config: {self.config_path}")
+
+    def __offer_save_config(self):
+        # will only ask to save if a new options is added to config that's
+        # not already in the config file
+        # first read in the original config again
+        original_config = configparser.ConfigParser()
+        original_config.read(self.config_path)
+
+        # then for each config section and option, check for additions
+        for section in dict(self.config.items()).keys():
+            for option in dict(self.config[section]).keys():
+                if not original_config.has_option(section, option):
+                    print(f"[i] The script is about to exit but you have\
+                          unsaved changes to {self.config_path}.")
+                    yn = input("[>] Save modified config to file? (y/n): ")
+                    if yn == 'y':
+                        with open(self.config_path, 'w') as file:
+                            self.config.write(file)
+                    return
 
     def _check_config_option(self, section, option,
                              missing_msg="[!] Missing option in config",
                              input_msg="[>] Please enter value: ",
                              confirm_msg="[i] Got value: ",
                              isbool=False):
+        # convenience function to check if an option is defined in the config;
+        # if not, interactively get its value and add to config
         try:
+            # ideally the value can be read from config, confirming it exists
             value = self.config[section][option]
-        except (NameError, KeyError):
+        except KeyError:
+            # if the above throws an exception, ask the user for the value
             print(missing_msg)
             value = input(input_msg)
+
+            # may need to create a new section
             if not self.config.has_section(section):
                 self.config.add_section(section)
 
+            # for bools expect a y/n answer
             if isbool:
                 value = str(value.lower() == 'y')
+
+            # set the option we've just read in
             self.config[section][option] = value
+
+        # either way echo the value to the user for sanity checking
         print(confirm_msg + value)
 
     def __check_nc_files(self):
@@ -83,6 +117,7 @@ class Workflow:
             print("[i] Subsetting data")
             self.ds.subset(variable=subset)
         except (NameError, KeyError):
+            # if subset is not defined, just continue without subsetting
             pass
 
         # merge datasets if multiple files specified in config
@@ -100,8 +135,17 @@ class Workflow:
     def _preprocess_ds(self):
         print("[i] No preprocessing routine defined")
 
-    def _init_remaining_attrs(self):
+    def _checkers(self):
+        self.__check_nc_files()
+
+    def _setters(self):
         print("[i] All attributes have been initialized")
+
+    def regrid_to_ds(self, target_ds):
+        # interpolate/extrapolate the data to fit the grid of a target dataset
+        self.ds.regrid(target_ds)
+        # features and timeseries need to be re-created for new grid
+        self._setters()
 
     def run(self):
         print("[!] Nothing to run. Did you forget to override self.run()?")
@@ -109,40 +153,42 @@ class Workflow:
     def list_plottable_vars(self):
         # get an alphabetical list of plottable variables
         plottable_vars = self.ds.variables
+
+        # easy reference to a dataframe containing useful info on variables
         df = self.ds.contents
 
         # list plottable variables for the user to inspect
         for i, var in enumerate(plottable_vars):
-            # print in a nice format if possible
             try:
+                # print extra info if possible
                 long_name = df.loc[df['variable'] == var].long_name.values[0]
                 print(f"{i}. {var}\n\t{long_name}")
             except Exception:
+                # just print the variable name
                 print(f"{i}. {var}")
 
-    def __offer_save_config(self):
+    def plot_var(self, var_to_plot):
+        try:
+            # get the data as an array
+            ds_tmp = self.ds.copy()
+            ds_tmp.subset(variables=var_to_plot)
+            var_xr = ds_tmp.to_xarray()
+            data_to_plot = var_xr[var_to_plot].values
 
-        # will only ask to save if a new options is added to config that's
-        # not already in the config file
-        original_config = configparser.ConfigParser()
-        original_config.read(self.config_path)
+            try:
+                # add more info in plot title if possible
+                plot_title = var_to_plot + " ("\
+                    + var_xr[var_to_plot].long_name + ") "\
+                    + var_xr[var_to_plot].units
+            except AttributeError:
+                # stick to basic info if the above goes wrong
+                plot_title = var_to_plot
 
-        for section in dict(self.config.items()).keys():
-            for option in dict(self.config[section]).keys():
-                if not original_config.has_option(section, option):
-                    print(f"[i] The script is about to exit but you have\
-                          unsaved changes to {self.config_path}.")
-                    yn = input("[>] Save modified config to file? (y/n): ")
-                    if yn == 'y':
-                        with open(self.config_path, 'w') as file:
-                            self.config.write(file)
-                    return
+            # pass on the data array to interactive viewer
+            MultiSliceViewer(data_to_plot, plot_title).show()
 
-    def regrid_to_ds(self, target_ds):
-        self.ds.regrid(target_ds)
-
-        # features and timeseries need to be re-created for new grid
-        self._init_remaining_attrs()
+        except IndexError:
+            print(f"[!] {var_to_plot} not found; check spelling")
 
 
 class RadioCarbonWorkflow(Workflow):
@@ -156,11 +202,13 @@ class RadioCarbonWorkflow(Workflow):
         self.__construct_rename_dict(['dc14', 'dic', 'di14c'])
         self.__rename_vars()
 
+        # compute dc14 if not present in dataset and we have the necessary vars
         if 'dic' in self.ds.variables and\
                 'di14c' in self.ds.variables and\
                 'dc14' not in self.ds.variables:
             self.__compute_dc14()
 
+        # compute radiocarbon ages if dc14 exists in dataset
         if 'dc14' in self.ds.variables:
             self.__check_mean_radiocarbon_lifetime()
             self.__check_atm_dc14()
@@ -168,16 +216,14 @@ class RadioCarbonWorkflow(Workflow):
 
     def __construct_rename_dict(self, vars):
         # get the name of each variable as it appears in the dataset
-        # from config or interactively
         self.__rename_dict = {}
         for var in vars:
             try:
+                # try to read from config
                 self.__rename_dict[var] = self.config['radiocarbon'][var]
-            except NameError:
-                print(f"[!] Name of the {var} variable was not provided")
-                self.__rename_dict[var] = input(
-                    "[>] Enter {var} variable name as it appears in dataset: ")
             except KeyError:
+                # if option not defined, assume user does not need it
+                # and continue without asking
                 pass
 
     def __rename_vars(self):
@@ -203,7 +249,7 @@ class RadioCarbonWorkflow(Workflow):
         )
 
     def __compute_local_age(self):
-        # using mean radiocarbon lifetime and dc14
+        # using mean radiocarbon lifetime, dc14, atm_dc14
         mean_radio_life =\
             self.config['radiocarbon'].getint('mean_radiocarbon_lifetime')
         atm_dc14 = self.config['radiocarbon'].getint('atm_dc14')
@@ -221,9 +267,12 @@ class RadioCarbonWorkflow(Workflow):
 
 class TimeseriesWorkflowBase(RadioCarbonWorkflow):
 
-    def _init_remaining_attrs(self):
-        self.__get_age_array()
+    def _checkers(self):
+        super()._checkers()
         self.__check_plot_all_ts_bool()
+
+    def _setters(self):
+        self.__get_age_array()
 
     def run(self):
         # this base class simply plots all the timeseries if asked to
@@ -232,11 +281,11 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
 
     def __get_age_array(self):
         # some  manipulation to isolate age data and cast it into a useful form
-        # make a copy of the original dataset to safely subset to one variable
+        # make a copy of the original dataset to subset to one variable
         ds_tmp = self.ds.copy()
         ds_tmp.subset(variable='local_age')
 
-        # convert to xarray and extract the age numpy array
+        # convert to xarray and extract the numpy array of values
         age_xr = ds_tmp.to_xarray()
         age_array = age_xr['local_age'].values
 
@@ -290,9 +339,9 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
 
 class CorrelationWorkflow(TimeseriesWorkflowBase):
 
-    def _init_remaining_attrs(self):
+    def _checkers(self):
 
-        TimeseriesWorkflowBase._init_remaining_attrs(self)
+        super()._checkers()
 
         self.__check_pvalues_bool()
         if self.config['correlation'].getboolean('pvalues'):
@@ -337,14 +386,14 @@ class CorrelationWorkflow(TimeseriesWorkflowBase):
 
 
 class TSClusteringWorkflow(TimeseriesWorkflowBase):
-    def _init_remaining_attrs(self):
-        # run the parent init
-        TimeseriesWorkflowBase._init_remaining_attrs(self)
-
-        # compute and read additional attributes
-        self.__get_ts()
+    def _checkers(self):
+        super()._checkers()
         self.__check_n_clusters()
         self.__check_clustering_method()
+
+    def _setters(self):
+        super()._setters()
+        self.__get_ts()
 
     def run(self):
         # run the parent workflow (plotting all timeseries)
@@ -432,14 +481,14 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         clusters_fig.show()
 
     def map_clusters(self):
-        labels_shaped = self.make_labels_shaped()
+        labels_shaped = self._make_labels_shaped()
 
         # finally view the clusters on a map
         clusters_fig = plt.figure()
         ax = clusters_fig.add_subplot()
         ax.imshow(labels_shaped, origin='lower')
 
-    def make_labels_shaped(self):
+    def _make_labels_shaped(self):
         df = self._make_df()
         df.loc[
             df.index.isin(df.dropna().index),
@@ -452,7 +501,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         return labels_shaped
 
     def make_labels_data_array(self, long_name):
-        labels_shaped = self.make_labels_shaped()
+        labels_shaped = self._make_labels_shaped()
         all_coords = self.ds.to_xarray().coords
         coords = {}
         for key in all_coords:
@@ -461,8 +510,10 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
                     coords[key] = all_coords[key]
             except AttributeError:
                 pass
-
-        data_array = xr.DataArray(data=labels_shaped.T,
+        # arcane magic to put the coordinates in reverse order
+        # because otherwise DataArray expects the transpose of what we have
+        coords = dict(reversed(list(coords.items())))
+        data_array = xr.DataArray(data=labels_shaped,
                                   coords=coords,
                                   attrs={'long_name': long_name})
         return data_array
@@ -470,10 +521,12 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
 
 class KMeansWorkflowBase(Workflow):
 
-    def _init_remaining_attrs(self):
-        self.__get_selected_vars()
+    def _checkers(self):
         self.__check_n_init()
         self.__check_max_iter()
+
+    def _setters(self):
+        self.__get_selected_vars()
         self.__get_pipeline()
         self.__get_features()
 
@@ -507,27 +560,6 @@ class KMeansWorkflowBase(Workflow):
         except KeyboardInterrupt:
             # Ctrl+C to exit loop
             pass
-
-    def plot_var(self, var_to_plot):
-        try:
-            # get the data as an array
-            ds_tmp = self.ds.copy()
-            ds_tmp.subset(variables=var_to_plot)
-            var_xr = ds_tmp.to_xarray()
-            data_to_plot = var_xr[var_to_plot].values
-
-            # add more info in plot title if possible
-            try:
-                plot_title = var_to_plot + " ("\
-                    + var_xr[var_to_plot].long_name + ") "\
-                    + var_xr[var_to_plot].units
-            except AttributeError:
-                plot_title = var_to_plot
-
-            MultiSliceViewer(data_to_plot, plot_title).show()
-
-        except IndexError:
-            print(f"[!] {var_to_plot} not found; check spelling")
 
     def __get_pipeline(self):
         # construct the data processing pipeline including scaling and k-means
@@ -673,11 +705,13 @@ class KMeansMetricsWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
 
 class KMeansWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
 
-    def _init_remaining_attrs(self):
+    def _checkers(self):
 
-        KMeansWorkflowBase._init_remaining_attrs(self)
+        super()._checkers()
         self.__check_palette()
         self.__check_n_clusters()
+
+    def _setters(self):
         self.__set_n_clusters()
 
     def run(self):
