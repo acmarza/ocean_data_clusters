@@ -11,16 +11,20 @@ git clone https://gitlab.com/earth15/ocean_data_clusters.git
 cd ocean_data_clusters
 
 ```
-Create a new conda environment and install the required python packages:
+Create a conda environment from the file provided, with all the required python modules:
 ```
-conda create -n nccluster -c conda-forge configparser nctoolkit tqdm tslearn
+conda env create -f environment.yml
+```
+Alternatively create a new conda environment and install the required python packages (and good luck solving conflicts):
+```
+conda create -n nccluster -c conda-forge nctoolkit sktime tqdm tslearn xesmf
 ```
 Activate the environment:
 ```
 conda activate nccluster
 ```
 ## Usage
-Edit the example configuration file in folder 'configs' as needed (see explanations therein). The only crucial value to specify for a first run is nc_files (path to netCDF data file(s)); the script will walk you through setting the other values.
+Edit the example configuration file in folder 'configs' as needed (see explanations therein). 
 ### K-means clustering
 
 1. Run the script:
