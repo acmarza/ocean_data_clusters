@@ -538,6 +538,10 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
                                          'time series clustering results'})
         return data_array
 
+    def save_labels_data_array(self, filename):
+        da = self.make_labels_data_array()
+        da.to_netcdf(filename)
+        
 
 class KMeansWorkflowBase(Workflow):
 
