@@ -16,6 +16,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sktime.clustering.k_medoids import TimeSeriesKMedoids
 from tqdm import tqdm
 from tslearn.clustering import TimeSeriesKMeans
+from tslearn.preprocessing import TimeSeriesScalerMeanVariance
 from tslearn.utils import to_time_series_dataset, to_sktime_dataset
 
 from nccluster.multisliceviewer import MultiSliceViewer
@@ -446,15 +447,17 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
 
         }
 
+        dataset = self.ts
+        dataset = TimeSeriesScalerMeanVariance().fit_transform(dataset)
+
         # initialise model using desired clustering method
         if self.config['timeseries']['method'] == 'k-means':
             print("[i] Initialising k-means model")
             self.model = TimeSeriesKMeans(**kwargs)
-            dataset = self.ts
         elif self.config['timeseries']['method'] == 'k-medoids':
             print("[i] Initialising k-medoids model")
             self.model = TimeSeriesKMedoids(**kwargs)
-            dataset = to_sktime_dataset(self.ts)
+            dataset = to_sktime_dataset(dataset)
 
         print("[i] Fitting model, please stand by")
 
@@ -541,7 +544,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
     def save_labels_data_array(self, filename):
         da = self.make_labels_data_array()
         da.to_netcdf(filename)
-        
+
 
 class KMeansWorkflowBase(Workflow):
 
