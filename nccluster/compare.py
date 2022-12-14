@@ -19,13 +19,25 @@ class ClusterMatcher:
         self.labels_right.to_netcdf(save_path_2)
 
     def compare_maps(self):
-        overlap_mask = np.equal(self.labels_left.values,
-                                self.labels_right.values)
 
         fig, (ax1, ax2) = plt.subplots(1, 2)
         ax1.imshow(self.labels_left.values, origin='lower')
-        ax1.contourf(overlap_mask, True, hatches=["//"], alpha=0)
         ax2.imshow(self.labels_right.values, origin='lower')
+        plt.show()
+
+    def overlap(self):
+        try:
+            overlap_mask = np.equal(self.labels_left.values,
+                                    self.labels_right.values)
+        except ValueError:
+            print("[!] Can't overlap maps with different sizes! Try regrid.")
+        print(np.count_nonzero(overlap_mask))
+        fig, (ax1, ax2) = plt.subplots(1, 2)
+        hatches = ["", "/\\/\\/\\/\\"]
+        ax1.imshow(self.labels_left.values, origin='lower')
+        ax1.contourf(overlap_mask, 1, hatches=hatches, color='white', alpha=0)
+        ax2.imshow(self.labels_right.values, origin='lower')
+        ax2.contourf(overlap_mask, 1, hatches=hatches, color='white', alpha=0)
         plt.show()
 
     def regrid_left_to_right(self):
