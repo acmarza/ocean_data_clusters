@@ -28,6 +28,7 @@ def main():
     matcher.match_labels()
     matcher.compare_maps()
 
+    matcher.overlap()
 
 if __name__ == "__main__":
     main()
