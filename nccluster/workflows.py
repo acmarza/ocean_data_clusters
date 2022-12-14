@@ -541,7 +541,8 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
     def save_labels_data_array(self, filename):
         da = self.make_labels_data_array()
         da.to_netcdf(filename)
-        
+        print(f"[i] Saved labels to {filename}")
+
 
 class KMeansWorkflowBase(Workflow):
 
