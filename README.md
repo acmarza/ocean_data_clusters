@@ -29,7 +29,7 @@ Edit the example configuration file in folder 'configs' as needed (see explanati
 
 1. Run the script:
 ```
-python main.py --method km --config configs/example.conf
+python examples/workflows_demo.py --method km --config configs/example.conf
 ```
 
 2. Interacting with the plots:
@@ -43,7 +43,7 @@ python main.py --method km --config configs/example.conf
 ### Correlation clustering
 1. Run the script:
 ```
-python main.py --method corr --config configs/example.conf
+python workflows_demo.py --method corr --config configs/example.conf
 ```
 2. Interaction:
 - upper-left plot is the main view
@@ -60,7 +60,7 @@ python main.py --method corr --config configs/example.conf
 ### Timeseries clustering
 1. Run the script:
 ```
-python main.py --method corr --config configs/example.conf
+python workflows_demo.py --method ts --config configs/example.conf
 ```
 2. Explanations of plots:
 - the first plot that appears shows the timeseries assigned to each cluster (thin black lines) and the cluster barycenter (red line)
