@@ -27,24 +27,38 @@ class ClusterMatcher:
 
     def overlap(self):
         try:
+            # 2D array that is True where the left and right maps agree
             overlap_mask = np.equal(self.labels_left.values,
                                     self.labels_right.values)
         except ValueError:
             print("[!] Can't overlap maps with different sizes! Try regrid.")
-        print(np.count_nonzero(overlap_mask))
+
+        # initialise the figure and axes and define hatches pattern
         fig, (ax1, ax2) = plt.subplots(1, 2)
         hatches = ["", "/\\/\\/\\/\\"]
+
+        # show left map and hatch based on overlap mask
         ax1.imshow(self.labels_left.values, origin='lower')
-        ax1.contourf(overlap_mask, 1, hatches=hatches, color='white', alpha=0)
+        ax1.contourf(overlap_mask, 1, hatches=hatches, alpha=0)
+
+        # show right map and hatch based on overlap mask
         ax2.imshow(self.labels_right.values, origin='lower')
-        ax2.contourf(overlap_mask, 1, hatches=hatches, color='white', alpha=0)
+        ax2.contourf(overlap_mask, 1, hatches=hatches, alpha=0)
+
+        # show figure
         plt.show()
 
     def regrid_left_to_right(self):
+        # create regridder object with the input coords of left map
+        # and output coords of right map
+        # nearest source to destination algorithm avoids interpolation
+        # (since we want integer labels)
         regridder = xe.Regridder(self.labels_left,
                                  self.labels_right,
                                  'nearest_s2d'
                                  )
+
+        # regrid the left map
         self.labels_left = regridder(self.labels_left)
 
     def match_labels(self):
