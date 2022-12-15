@@ -17,7 +17,7 @@ conda env create -f environment.yml
 ```
 Alternatively create a new conda environment and install the required python packages (and good luck solving conflicts):
 ```
-conda create -n nccluster -c conda-forge nctoolkit sktime tqdm tslearn xesmf
+conda create -n nccluster -c conda-forge matplotlib-venn nctoolkit sktime tqdm tslearn xesmf
 ```
 Activate the environment:
 ```

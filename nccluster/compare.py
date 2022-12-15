@@ -3,23 +3,39 @@ import matplotlib.pyplot as plt
 import xarray as xr
 import xesmf as xe
 
+from matplotlib.colors import Normalize
+from matplotlib.cm import get_cmap
+from matplotlib_venn import venn2
+
 
 class ClusterMatcher:
+
+    def __init__(self, palette='viridis'):
+        self.cmap = get_cmap(palette)
+
+    def __set_norm(self):
+        # create a norm object for coloring purposes
+        # scaling the range of labels in our data to the interval [0, 1]
+        all_data = np.concatenate([self.labels_left.values.flatten(),
+                                   self.labels_right.values.flatten()])
+        self.norm = Normalize(vmin=np.nanmin(all_data),
+                              vmax=np.nanmax(all_data))
 
     def labels_from_data_arrays(self, labels_left, labels_right):
         self.labels_left = labels_left
         self.labels_right = labels_right
+        self.__set_norm()
 
     def labels_from_file(self, save_path_1, save_path_2):
         self.labels_left = xr.open_dataarray(save_path_1)
         self.labels_right = xr.open_dataarray(save_path_2)
+        self.__set_norm()
 
     def save_labels(self, save_path_1, save_path_2):
         self.labels_left.to_netcdf(save_path_1)
         self.labels_right.to_netcdf(save_path_2)
 
     def compare_maps(self):
-
         fig, (ax1, ax2) = plt.subplots(1, 2)
         ax1.imshow(self.labels_left.values, origin='lower')
         ax2.imshow(self.labels_right.values, origin='lower')
@@ -34,19 +50,63 @@ class ClusterMatcher:
             print("[!] Can't overlap maps with different sizes! Try regrid.")
 
         # initialise the figure and axes and define hatches pattern
-        fig, (ax1, ax2) = plt.subplots(1, 2)
+        self.fig, self.overlap_axes = plt.subplots(1, 3)
+        ax1, ax2, _ = self.overlap_axes
         hatches = ["", "/\\/\\/\\/\\"]
 
         # show left map and hatch based on overlap mask
-        ax1.imshow(self.labels_left.values, origin='lower')
+        ax1.imshow(self.labels_left.values, origin='lower', cmap=self.cmap)
         ax1.contourf(overlap_mask, 1, hatches=hatches, alpha=0)
 
         # show right map and hatch based on overlap mask
-        ax2.imshow(self.labels_right.values, origin='lower')
+        ax2.imshow(self.labels_right.values, origin='lower', cmap=self.cmap)
         ax2.contourf(overlap_mask, 1, hatches=hatches, alpha=0)
+
+        # listen for clicks
+        self.cid = self.fig.canvas.mpl_connect('button_press_event',
+                                               self.__venn_clicked_label)
 
         # show figure
         plt.show()
+
+    def __venn_clicked_label(self, event):
+        # get click location
+        x_pos = int(event.xdata)
+        y_pos = int(event.ydata)
+
+        # set data to left or right map depending on where the mouse was
+        if event.inaxes == self.overlap_axes[0]:
+            data = self.labels_left.values
+        if event.inaxes == self.overlap_axes[1]:
+            data = self.labels_right.values
+
+        # set the label from its index in the map data array
+        label = data[y_pos, x_pos]
+
+        # get the color corresponding to the label
+        label_color = self.cmap(self.norm(label))
+
+        # get the sets of flat indices with this label
+        (idx,) = np.where(self.labels_left.values.flatten() == label)
+        left_set = set(idx)
+        (idx,) = np.where(self.labels_right.values.flatten() == label)
+        right_set = set(idx)
+
+        # get a reference to the venn diagram ax and clear previous drawing
+        _, _, ax3 = self.overlap_axes
+        ax3.clear()
+
+        # create new venn diagram based on the sets corresponding to the label
+        venn = venn2(subsets=[left_set, right_set],
+                     set_colors=[label_color, label_color],
+                     ax=ax3)
+
+        # use black edges on the venn diagram
+        for patch in venn.patches:
+            patch.set(edgecolor='black')
+
+        # update the figure
+        self.fig.canvas.draw()
 
     def regrid_left_to_right(self):
         # create regridder object with the input coords of left map
