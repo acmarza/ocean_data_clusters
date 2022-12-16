@@ -441,7 +441,6 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         kwargs = {
             'n_clusters': self.config['timeseries'].getint('n_clusters'),
             # 'max_iter': 10,
-            'verbose': True,
             'metric': 'euclidean'
 
         }
@@ -512,7 +511,8 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         labels_shaped = np.reshape(labels_flat, [y, x])
         return labels_shaped
 
-    def make_labels_data_array(self):
+    def make_labels_data_array(self,
+                               long_name='time series clustering results'):
         # get the raw labels array
         labels_shaped = self._make_labels_shaped()
 
@@ -534,12 +534,12 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         data_array = xr.DataArray(data=labels_shaped,
                                   coords=coords,
                                   name='labels',
-                                  attrs={'long_name':
-                                         'time series clustering results'})
+                                  attrs={'long_name': long_name}
+                                  )
         return data_array
 
-    def save_labels_data_array(self, filename):
-        da = self.make_labels_data_array()
+    def save_labels_data_array(self, filename, long_name):
+        da = self.make_labels_data_array(long_name)
         da.to_netcdf(filename)
         print(f"[i] Saved labels to {filename}")
 
