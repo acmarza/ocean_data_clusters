@@ -38,7 +38,9 @@ class ClusterMatcher:
     def compare_maps(self):
         fig, (ax1, ax2) = plt.subplots(1, 2)
         ax1.imshow(self.labels_left.values, origin='lower')
+        ax1.set_title(self.labels_left.long_name)
         ax2.imshow(self.labels_right.values, origin='lower')
+        ax2.set_title(self.labels_right.long_name)
         plt.show()
 
     def overlap(self):
@@ -50,21 +52,25 @@ class ClusterMatcher:
             print("[!] Can't overlap maps with different sizes! Try regrid.")
 
         # initialise the figure and axes and define hatches pattern
-        self.fig, self.overlap_axes = plt.subplots(1, 3)
-        ax1, ax2, _ = self.overlap_axes
+        fig = plt.figure()
+        self.ax1 = plt.subplot(221)
+        self.ax2 = plt.subplot(222)
+
         hatches = ["", "/\\/\\/\\/\\"]
 
         # show left map and hatch based on overlap mask
-        ax1.imshow(self.labels_left.values, origin='lower', cmap=self.cmap)
-        ax1.contourf(overlap_mask, 1, hatches=hatches, alpha=0)
+        self.ax1.imshow(self.labels_left.values,
+                        origin='lower', cmap=self.cmap)
+        self.ax1.contourf(overlap_mask, 1, hatches=hatches, alpha=0)
 
         # show right map and hatch based on overlap mask
-        ax2.imshow(self.labels_right.values, origin='lower', cmap=self.cmap)
-        ax2.contourf(overlap_mask, 1, hatches=hatches, alpha=0)
+        self.ax2.imshow(self.labels_right.values,
+                        origin='lower', cmap=self.cmap)
+        self.ax2.contourf(overlap_mask, 1, hatches=hatches, alpha=0)
 
         # listen for clicks
-        self.cid = self.fig.canvas.mpl_connect('button_press_event',
-                                               self.__venn_clicked_label)
+        self.cid = fig.canvas.mpl_connect('button_press_event',
+                                          self.__venn_clicked_label)
 
         # show figure
         plt.show()
@@ -75,9 +81,9 @@ class ClusterMatcher:
         y_pos = int(event.ydata)
 
         # set data to left or right map depending on where the mouse was
-        if event.inaxes == self.overlap_axes[0]:
+        if event.inaxes == self.ax1:
             data = self.labels_left.values
-        if event.inaxes == self.overlap_axes[1]:
+        if event.inaxes == self.ax2:
             data = self.labels_right.values
 
         # set the label from its index in the map data array
@@ -93,7 +99,7 @@ class ClusterMatcher:
         right_set = set(idx)
 
         # get a reference to the venn diagram ax and clear previous drawing
-        _, _, ax3 = self.overlap_axes
+        ax3 = plt.subplot(212)
         ax3.clear()
 
         # create new venn diagram based on the sets corresponding to the label
@@ -106,7 +112,7 @@ class ClusterMatcher:
             patch.set(edgecolor='black')
 
         # update the figure
-        self.fig.canvas.draw()
+        event.canvas.draw()
 
     def regrid_left_to_right(self):
         # create regridder object with the input coords of left map
@@ -117,9 +123,12 @@ class ClusterMatcher:
                                  self.labels_right,
                                  'nearest_s2d'
                                  )
-
+        # regridding deletes the attributes for some reason so save a copy
+        attrs = self.labels_left.attrs
         # regrid the left map
         self.labels_left = regridder(self.labels_left)
+        # put the attributes back in
+        self.labels_left.attrs = attrs
 
     def match_labels(self):
         # flatten labels into 1D array
