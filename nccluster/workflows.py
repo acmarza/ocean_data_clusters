@@ -16,6 +16,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sktime.clustering.k_medoids import TimeSeriesKMedoids
 from tqdm import tqdm
 from tslearn.clustering import TimeSeriesKMeans
+from tslearn.preprocessing import TimeSeriesScalerMeanVariance
 from tslearn.utils import to_time_series_dataset, to_sktime_dataset
 
 from nccluster.multisliceviewer import MultiSliceViewer
@@ -123,6 +124,7 @@ unsaved changes to {self.config_path}.")
 
     def __load_ds(self):
         print("[i] Loading data")
+
         # get a list of file paths and create the DataSet object
         nc_files = self.config['default']['nc_files'].split(",")
         self.ds = nc.DataSet(nc_files)
@@ -145,6 +147,9 @@ unsaved changes to {self.config_path}.")
                   "config, keeping only variables of interest. Or merge your",
                   "datasets externally.")
             exit()
+
+    def _preprocess_ds(self):
+        print("[i] No preprocessing routine defined")
 
     def _checkers(self):
         self.__check_nc_files()
@@ -454,9 +459,13 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         kwargs = {
             'n_clusters': self.config['timeseries'].getint('n_clusters'),
             # 'max_iter': 10,
+            'verbose': True,
             'metric': 'euclidean'
 
         }
+
+#        dataset = self.ts
+#        dataset = TimeSeriesScalerMeanVariance().fit_transform(dataset)
 
         # initialise model using desired clustering method
         if self.config['timeseries']['method'] == 'k-means':
