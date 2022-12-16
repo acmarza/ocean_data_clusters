@@ -148,9 +148,6 @@ unsaved changes to {self.config_path}.")
                   "datasets externally.")
             exit()
 
-    def _preprocess_ds(self):
-        print("[i] No preprocessing routine defined")
-
     def _checkers(self):
         self.__check_nc_files()
         self.__check_subset()
@@ -464,7 +461,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
 
         }
 
-#        dataset = self.ts
+#       dataset = self.ts
 #        dataset = TimeSeriesScalerMeanVariance().fit_transform(dataset)
 
         # initialise model using desired clustering method
