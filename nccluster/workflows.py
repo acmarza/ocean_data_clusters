@@ -88,24 +88,26 @@ unsaved changes to {self.config_path}.")
             # apply default or ask user to input a value
             if default is not None:
                 value = default
+
             else:
                 # ask the user for the value
                 print(missing_msg)
                 value = input(input_msg)
 
+                # for bools expect a y/n answer
+                if isbool:
+                    value = (value.lower() == 'y')
+
             # may need to create a new section
             if not self.config.has_section(section):
                 self.config.add_section(section)
 
-            # for bools expect a y/n answer
-            if isbool:
-                value = (value.lower() == 'y')
-
+            value = str(value)
             # set the option we've just read in
-            self.config[section][option] = str(value)
+            self.config[section][option] = value
 
         # either way echo the value to the user for sanity checking
-        print(confirm_msg + str(value))
+        print(confirm_msg + value)
 
     def __check_nc_files(self):
         self._check_config_option(
@@ -413,6 +415,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         super()._checkers()
         self.__check_n_clusters()
         self.__check_clustering_method()
+        self.__check_scaling_bool()
 
     def _setters(self):
         super()._setters()
@@ -451,6 +454,14 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
             confirm_msg="[i] Proceeding with clustering method = "
         )
 
+    def __check_scaling_bool(self):
+        self._check_config_option(
+            'timeseries', 'scaling',
+            default=False,
+            isbool=True,
+            confirm_msg="[i] Proceeding with scaling bool = "
+        )
+
     def fit_model(self):
         # define the keyword arguments to pass to the model
         kwargs = {
@@ -461,18 +472,22 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
 
         }
 
-#       dataset = self.ts
-#        dataset = TimeSeriesScalerMeanVariance().fit_transform(dataset)
+        dataset = self.ts
+
+        # optionally scale the data (aids in shape detection
+        # but loses amplitude information)
+        if self.config['timeseries'].getboolean('scaling'):
+            print("[i] Normalising time series")
+            dataset = TimeSeriesScalerMeanVariance().fit_transform(dataset)
 
         # initialise model using desired clustering method
         if self.config['timeseries']['method'] == 'k-means':
             print("[i] Initialising k-means model")
             self.model = TimeSeriesKMeans(**kwargs)
-            dataset = self.ts
         elif self.config['timeseries']['method'] == 'k-medoids':
             print("[i] Initialising k-medoids model")
             self.model = TimeSeriesKMedoids(**kwargs)
-            dataset = to_sktime_dataset(self.ts)
+            dataset = to_sktime_dataset(dataset)
 
         print("[i] Fitting model, please stand by")
 
