@@ -59,8 +59,8 @@ class Workflow:
         for section in dict(self.config.items()).keys():
             for option in dict(self.config[section]).keys():
                 if not original_config.has_option(section, option):
-                    print(f"[i] The script is about to exit but you have\
-                          unsaved changes to {self.config_path}.")
+                    print(f"[i] The script is about to exit, but you have \
+unsaved changes to {self.config_path}.")
                     yn = input("[>] Save modified config to file? (y/n): ")
                     if yn == 'y':
                         with open(self.config_path, 'w') as file:
@@ -71,6 +71,8 @@ class Workflow:
                              missing_msg="[!] Missing option in config",
                              input_msg="[>] Please enter value: ",
                              confirm_msg="[i] Got value: ",
+                             default=None,
+                             required=True,
                              isbool=False):
         # convenience function to check if an option is defined in the config;
         # if not, interactively get its value and add to config
@@ -78,9 +80,17 @@ class Workflow:
             # ideally the value can be read from config, confirming it exists
             value = self.config[section][option]
         except KeyError:
-            # if the above throws an exception, ask the user for the value
-            print(missing_msg)
-            value = input(input_msg)
+            # do nothing if option missing from config and not required
+            if not required:
+                return
+
+            # apply default or ask user to input a value
+            if default is not None:
+                value = default
+            else:
+                # ask the user for the value
+                print(missing_msg)
+                value = input(input_msg)
 
             # may need to create a new section
             if not self.config.has_section(section):
@@ -88,13 +98,13 @@ class Workflow:
 
             # for bools expect a y/n answer
             if isbool:
-                value = str(value.lower() == 'y')
+                value = (value.lower() == 'y')
 
             # set the option we've just read in
-            self.config[section][option] = value
+            self.config[section][option] = str(value)
 
         # either way echo the value to the user for sanity checking
-        print(confirm_msg + value)
+        print(confirm_msg + str(value))
 
     def __check_nc_files(self):
         self._check_config_option(
@@ -104,21 +114,25 @@ class Workflow:
             confirm_msg='[i] NetCDF file(s): '
         )
 
+    def __check_subset(self):
+        self._check_config_option(
+            'default', 'subset',
+            required=False,
+            confirm_msg="[i] Data will be subset keeping only variables: "
+        )
+
     def __load_ds(self):
         print("[i] Loading data")
-
         # get a list of file paths and create the DataSet object
         nc_files = self.config['default']['nc_files'].split(",")
         self.ds = nc.DataSet(nc_files)
 
+    def _preprocess_ds(self):
         # optionally limit analysis to a subset of variables
-        try:
+        if self.config.has_option('default', 'subset'):
             subset = self.config['default']['subset'].split(",")
             print("[i] Subsetting data")
             self.ds.subset(variable=subset)
-        except (NameError, KeyError):
-            # if subset is not defined, just continue without subsetting
-            pass
 
         # merge datasets if multiple files specified in config
         try:
@@ -132,11 +146,9 @@ class Workflow:
                   "datasets externally.")
             exit()
 
-    def _preprocess_ds(self):
-        print("[i] No preprocessing routine defined")
-
     def _checkers(self):
         self.__check_nc_files()
+        self.__check_subset()
 
     def _setters(self):
         print("[i] All attributes have been initialized")
@@ -198,6 +210,7 @@ class RadioCarbonWorkflow(Workflow):
         # however this will require knowing the variable names in advance;
         # to avoid confusion, rename the variables used in this computation
         # to something simple and consistent
+        super()._preprocess_ds()
         print("[i] Preprocessing data")
         self.__construct_rename_dict(['dc14', 'dic', 'di14c'])
         self.__rename_vars()
@@ -610,16 +623,14 @@ class KMeansWorkflowBase(Workflow):
     def __check_n_init(self):
         self._check_config_option(
             'k-means', 'n_init',
-            missing_msg="[!] You have not specified n_init.",
-            input_msg="[>] Type n_init (default = 10): ",
+            default=10,
             confirm_msg="[i] Proceeding with n_init = "
         )
 
     def __check_max_iter(self):
         self._check_config_option(
             'k-means', 'max_iter',
-            missing_msg="[!] You have not specified max_iter.",
-            input_msg="[>] Type max_iter (default = 300): ",
+            default=300,
             confirm_msg="[i] Proceeding with max_iter = "
         )
 
@@ -737,6 +748,7 @@ class KMeansWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
         self.__check_n_clusters()
 
     def _setters(self):
+        super()._setters()
         self.__set_n_clusters()
 
     def run(self):
