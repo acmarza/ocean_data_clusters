@@ -289,6 +289,7 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
         self.__check_plot_all_ts_bool()
 
     def _setters(self):
+        self.mask = None
         self.__set_age_array()
 
     def run(self):
@@ -340,7 +341,7 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
         # remember age_array.shape = (t, z, y, x)
         # we want ts_array.shape = (n, t) at z=0 with n=x*y
         # note the -1 in np.reshape tells it to figure out n on its own
-        ts_array = self.age_array[:, 0]
+        ts_array = np.ma.masked_array(self.age_array[:, 0], self.mask)
         ts_array = np.reshape(ts_array,
                               newshape=(ts_array.shape[0], -1)).T
         return ts_array
@@ -419,7 +420,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
 
     def _setters(self):
         super()._setters()
-        self.__set_ts()
+        self._set_ts()
 
     def run(self):
         # run the parent workflow (plotting all time series)
@@ -434,7 +435,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
 
         plt.show()
 
-    def __set_ts(self):
+    def _set_ts(self, mask=None):
         # wrapper for setting the time series attribute of this class
         self.ts = self._make_ts()
 
@@ -467,7 +468,6 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         kwargs = {
             'n_clusters': self.config['timeseries'].getint('n_clusters'),
             # 'max_iter': 10,
-            'verbose': True,
             'metric': 'euclidean'
 
         }
@@ -531,6 +531,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         clusters_fig = plt.figure()
         ax = clusters_fig.add_subplot()
         ax.imshow(labels_shaped, origin='lower')
+        clusters_fig.show()
 
     def _make_labels_shaped(self):
         # get the timeseries as a dataframe and append labels to non-empty rows
@@ -576,6 +577,44 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         da = self.make_labels_data_array(long_name)
         da.to_netcdf(filename)
         print(f"[i] Saved labels to {filename}")
+
+
+class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
+
+    def run(self):
+        print("[i] This workflow will override the config setting for scaling")
+        self.config['timeseries']['scaling'] = 'True'
+        self.fit_model()
+        self.map_clusters()
+        self.config['timeseries']['scaling'] = 'False'
+        self.form_subclusters()
+
+    def form_subclusters(self):
+        if self.config['timeseries'].getboolean('scaling'):
+            print("[!] Scaling has not been turned off for subclusters")
+
+        labels = self._make_labels_shaped()
+        time_steps, _, _, _ = self.age_array.shape
+        # for each shape cluster construct a time series with just those points
+        for cluster in range(0, int(self.config['timeseries']['n_clusters'])):
+
+            # mask all the points not belonging to this cluster
+            cluster_mask = (labels != cluster)
+
+            # repeat the mask for each time step
+            cluster_mask = np.array([cluster_mask])
+            cluster_mask = np.repeat(cluster_mask, time_steps, axis=0)
+
+            # set the cluster mask and re-build time series object
+            self.mask = cluster_mask
+
+            self._set_ts()
+            # run algorithm again on these points, without normalisation
+            self.fit_model()
+
+            # view results
+            self.map_clusters()
+            self.plot_ts_clusters()
 
 
 class KMeansWorkflowBase(Workflow):
