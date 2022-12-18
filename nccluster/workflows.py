@@ -337,6 +337,8 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
         ax.set_ylabel('age')
         ax.set_title('age over time')
 
+        fig.show()
+
     def _make_ts_array(self):
         # remember age_array.shape = (t, z, y, x)
         # we want ts_array.shape = (n, t) at z=0 with n=x*y
@@ -430,8 +432,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         self.fit_model()
 
         # plot and show results
-        self.plot_ts_clusters()
-        self.map_clusters()
+        self.view_results()
 
         plt.show()
 
@@ -494,44 +495,40 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         # actually fit the model
         self.model.fit(dataset)
 
-    def plot_ts_clusters(self):
+    def view_results(self):
+
+        self.fig = plt.figure()
+        self._plot_ts_clusters()
+        self._map_clusters()
+        plt.show()
+
+    def _plot_ts_clusters(self):
         # get predictions for our time series from trained model
         # i.e. to which cluster each time series belongs
-        y_pred = self.model.labels_
+        labels = self.model.labels_
         n_clusters = self.model.n_clusters
 
-        # plot each cluster members and their barycenter
-        # initialise figure
-        clusters_fig = plt.figure()
-
         # for each cluster/label
-        for yi in range(n_clusters):
+        for label in range(n_clusters):
             # create a subplot in a table with n_cluster rows and 1 column
             # this subplot is number yi+1 because we're counting from 0
-            plt.subplot(n_clusters, 1, yi + 1)
+            ax = self.fig.add_subplot(n_clusters, 2, 2 * label + 1)
             # for every time series that has been assigned label yi
-            for xx in self.ts[y_pred == yi]:
+            for xx in self.ts[labels == label]:
                 # plot with a thin transparent line
-                plt.plot(xx.ravel(), "k-", alpha=.2)
+                ax.plot(xx.ravel(), "k-", alpha=.2)
             # plot the cluster barycenter
-            plt.plot(self.model.cluster_centers_[yi].ravel(), "r-")
+            ax.plot(self.model.cluster_centers_[label].ravel(), "r-")
             # label the cluster
-            plt.text(0.55, 0.85, 'Cluster %d' % (yi + 1),
-                     transform=plt.gca().transAxes)
-        # add a title at the top of the figure
-        clusters_fig.suptitle("k-means results")
-        # finally show the figure
-        clusters_fig.show()
+            ax.set_title(f'Cluster {label}')
 
-    def map_clusters(self):
+    def _map_clusters(self):
         # get the 2D labels array
         labels_shaped = self._make_labels_shaped()
 
-        # finally view the clusters on a map
-        clusters_fig = plt.figure()
-        ax = clusters_fig.add_subplot()
+        # view the clusters on a map
+        ax = self.fig.add_subplot(122)
         ax.imshow(labels_shaped, origin='lower')
-        clusters_fig.show()
 
     def _make_labels_shaped(self):
         # get the timeseries as a dataframe and append labels to non-empty rows
@@ -585,7 +582,7 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
         print("[i] This workflow will override the config setting for scaling")
         self.config['timeseries']['scaling'] = 'True'
         self.fit_model()
-        self.map_clusters()
+        # self.view_results()
         self.config['timeseries']['scaling'] = 'False'
         self.form_subclusters()
 
@@ -594,12 +591,19 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
             print("[!] Scaling has not been turned off for subclusters")
 
         labels = self._make_labels_shaped()
-        time_steps, _, _, _ = self.age_array.shape
+        n_clusters = int(self.config['timeseries']['n_clusters'])
+        time_steps, _, y, x = self.age_array.shape
+
+        labels_two_step = np.full((y, x, 2), np.nan)
+        labels_two_step[:, :, 0] = labels
+
+        subclust_sizes = []
+
         # for each shape cluster construct a time series with just those points
-        for cluster in range(0, int(self.config['timeseries']['n_clusters'])):
+        for label in range(0, n_clusters):
 
             # mask all the points not belonging to this cluster
-            cluster_mask = (labels != cluster)
+            cluster_mask = (labels != label)
 
             # repeat the mask for each time step
             cluster_mask = np.array([cluster_mask])
@@ -613,8 +617,29 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
             self.fit_model()
 
             # view results
-            self.map_clusters()
-            self.plot_ts_clusters()
+            # self.view_results()
+
+            sublabels = self._make_labels_shaped()
+            subclust_sizes.append(np.nanmax(sublabels) + 1)
+
+            for arg in np.argwhere(~np.isnan(sublabels)):
+                yi, xi = arg
+                labels_two_step[yi, xi, 1] = sublabels[yi, xi]
+
+        subclusters_map = np.full((y, x), np.nan)
+        for arg in np.argwhere(~np.isnan(labels)):
+            yi, xi = arg
+            label, sublabel = labels_two_step[yi, xi]
+            # prev_clust_sizes = subclust_sizes[:int(label)-1]
+            # offset = np.sum(prev_clust_sizes)
+            interval = 0.4
+            offset = sublabel * (interval / (subclust_sizes[int(label)]-1))
+
+            subclusters_map[yi, xi] = label - interval/2 + offset
+
+        plt.figure()
+        plt.imshow(subclusters_map, origin='lower')
+        plt.show()
 
 
 class KMeansWorkflowBase(Workflow):
@@ -813,7 +838,7 @@ class KMeansWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
 
     def run(self):
         self.set_kmeans_labels()
-        self.map_clusters()
+        self._map_clusters()
 
     def set_kmeans_labels(self):
         print("[i] Running k-means, please stand by...")
@@ -849,7 +874,7 @@ class KMeansWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
             'labels'
         ] = labels
 
-    def map_clusters(self):
+    def _map_clusters(self):
         # retrieve the labels column including missing vals as a 1D array
         labels_flat = np.ma.masked_array(self.df['labels'])
 
