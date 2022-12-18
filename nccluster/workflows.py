@@ -584,61 +584,107 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
         self.fit_model()
         # self.view_results()
         self.config['timeseries']['scaling'] = 'False'
-        self.form_subclusters()
+        self.labels2step = self.make_subclusters()
+        self.map_subclusters()
 
-    def form_subclusters(self):
+    def make_subclusters(self):
+        # scaling should be off to make amplitude-based subclusters
+        # but this is not enforced in case shape-based subclustering is desired
         if self.config['timeseries'].getboolean('scaling'):
             print("[!] Scaling has not been turned off for subclusters")
 
+        # some useful variables
         labels = self._make_labels_shaped()
         n_clusters = int(self.config['timeseries']['n_clusters'])
         time_steps, _, y, x = self.age_array.shape
 
-        labels_two_step = np.full((y, x, 2), np.nan)
-        labels_two_step[:, :, 0] = labels
+        # we'll save the cluster and subcluster assignments to this array
+        labels2step = np.full((y, x, 2), np.nan)
 
-        subclust_sizes = []
+        # index 0 = step one = cluster labels
+        labels2step[:, :, 0] = labels
 
-        # for each shape cluster construct a time series with just those points
+        # for each shape cluster
         for label in range(0, n_clusters):
 
             # mask all the points not belonging to this cluster
             cluster_mask = (labels != label)
 
-            # repeat the mask for each time step
+            # repeat the mask for each time step and set it
             cluster_mask = np.array([cluster_mask])
             cluster_mask = np.repeat(cluster_mask, time_steps, axis=0)
-
-            # set the cluster mask and re-build time series object
             self.mask = cluster_mask
 
+            # re-buld the time series dataset (now restricted to this cluster)
             self._set_ts()
+
             # run algorithm again on these points, without normalisation
             self.fit_model()
 
             # view results
             # self.view_results()
 
+            # get the labels for current subcluster
             sublabels = self._make_labels_shaped()
+
+            # for every grid point that is not nan
+            for arg in np.argwhere(~np.isnan(sublabels)):
+                # unpack the 2D index
+                yi, xi = arg
+
+                # set the subcluster label in the two-step map (second column)
+                labels2step[yi, xi, 1] = sublabels[yi, xi]
+
+        return labels2step
+
+    def __make_subclust_sizes(self):
+        # init empty list
+        subclust_sizes = []
+
+        # retrieve the number of shape-based clusters
+        n_clusters = int(np.nanmax(self.labels2step[:, :, 0])) + 1
+
+        # 0 to n-1
+        for cluster in range(0, n_clusters):
+            # get the indices of grid points in this cluster
+            args = np.argwhere(self.labels2step[:, :, 0] == cluster)
+
+            # get the sublabels at these positions
+            sublabels = self.labels2step[:, :, 1]
+            sublabels = sublabels[args]
+
+            # the number of subclusters is the maximum sublabel + 1
             subclust_sizes.append(np.nanmax(sublabels) + 1)
 
-            for arg in np.argwhere(~np.isnan(sublabels)):
-                yi, xi = arg
-                labels_two_step[yi, xi, 1] = sublabels[yi, xi]
+        return subclust_sizes
 
+    def map_subclusters(self):
+
+        # recover the size of each subcluster
+        subclust_sizes = self.__make_subclust_sizes()
+
+        # initialise an empty 2D array with the required size
+        _, _, y, x = self.age_array.shape
         subclusters_map = np.full((y, x), np.nan)
-        for arg in np.argwhere(~np.isnan(labels)):
+
+        # for every grid point in the surface slice that is not nan
+        for arg in np.argwhere(~np.isnan(self.age_array[0, 0])):
+            # unpack the index
             yi, xi = arg
-            label, sublabel = labels_two_step[yi, xi]
-            # prev_clust_sizes = subclust_sizes[:int(label)-1]
-            # offset = np.sum(prev_clust_sizes)
+            # unpack the labels for cluster and subcluster
+            label, sublabel = self.labels2step[yi, xi]
+
+            # will turn subcluster labels into floats
+            # close to the integer label of the shape-based cluster
+            # this makes for nice intracluster shading
             interval = 0.4
             offset = sublabel * (interval / (subclust_sizes[int(label)]-1))
 
+            # set the subcluster value for the current index
             subclusters_map[yi, xi] = label - interval/2 + offset
 
         plt.figure()
-        plt.imshow(subclusters_map, origin='lower')
+        plt.imshow(subclusters_map, origin='lower', cmap='hsv')
         plt.show()
 
 
