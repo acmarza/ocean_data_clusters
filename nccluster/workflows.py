@@ -511,9 +511,9 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         # for each cluster/label
         for label in range(n_clusters):
             # create a subplot in a table with n_cluster rows and 1 column
-            # this subplot is number yi+1 because we're counting from 0
+            # this subplot is number label+1 because we're counting from 0
             ax = self.fig.add_subplot(n_clusters, 2, 2 * label + 1)
-            # for every time series that has been assigned label yi
+            # for every time series that has been assigned this label
             for xx in self.ts[labels == label]:
                 # plot with a thin transparent line
                 ax.plot(xx.ravel(), "k-", alpha=.2)
@@ -582,7 +582,7 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
         print("[i] This workflow will override the config setting for scaling")
         self.config['timeseries']['scaling'] = 'True'
         self.fit_model()
-        # self.view_results()
+        self.view_results()
         self.config['timeseries']['scaling'] = 'False'
         self.labels2step = self.make_subclusters()
         self.map_subclusters()
@@ -647,11 +647,8 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
         # 0 to n-1
         for cluster in range(0, n_clusters):
             # get the indices of grid points in this cluster
-            args = np.argwhere(self.labels2step[:, :, 0] == cluster)
-
-            # get the sublabels at these positions
-            sublabels = self.labels2step[:, :, 1]
-            sublabels = sublabels[args]
+            sublabels = np.extract(self.labels2step[:, :, 0] == cluster,
+                                   self.labels2step[:, :, 1])
 
             # the number of subclusters is the maximum sublabel + 1
             subclust_sizes.append(np.nanmax(sublabels) + 1)
