@@ -68,5 +68,5 @@ python examples/workflows_demo.py --method two --config configs/example.conf
 ```
 
 2. Explanations of results:
-- the left-hand plot shows the timeseries assigned to each cluster (thin black lines) and the cluster barycenter (red line)
+- the left-hand plot shows the timeseries assigned to each cluster (thin black lines) and the (sub)cluster barycenters (red line(s))
 - the right-hand plot is a map of the clustering results
