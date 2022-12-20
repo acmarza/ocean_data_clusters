@@ -582,7 +582,7 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
         print("[i] This workflow will override the config setting for scaling")
         self.config['timeseries']['scaling'] = 'True'
         self.fit_model()
-        self.view_results()
+        # self.view_results()
         self.config['timeseries']['scaling'] = 'False'
         self.labels2step = self.make_subclusters()
         self.map_subclusters()
@@ -621,11 +621,9 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
             # run algorithm again on these points, without normalisation
             self.fit_model()
 
-            # view results
-            # self.view_results()
-
             # get the labels for current subcluster
             sublabels = self._make_labels_shaped()
+            sublabels = self.__reorder_labels(sublabels)
 
             # for every grid point that is not nan
             for arg in np.argwhere(~np.isnan(sublabels)):
@@ -636,6 +634,45 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
                 labels2step[yi, xi, 1] = sublabels[yi, xi]
 
         return labels2step
+
+    def __reorder_labels(self, labels):
+
+        # prepare an empty array to hold the average variance of each cluster
+        n_clusters = int(np.nanmax(labels) + 1)
+        variances = np.zeros(n_clusters)
+
+        # for every non-nan label
+        for label in np.unique(labels[~np.isnan(labels)]):
+            # assume at this point self.mask is still set for this cluster
+            # so can grab the timeseries array right away
+            # and zip it with the labels
+            cluster_tss = zip(self._make_ts_array(), labels.flatten())
+
+            # the zip above lets us this neat list comprehension
+            # to retrieve just the time series with the current label
+            subcluster_tss = [ts for (ts, ll) in cluster_tss if ll == label]
+
+            # but need to re-cast this list back into a numpy array
+            subcluster_tss = np.array(subcluster_tss)
+
+            # compute the stddev along the time axis
+            stds = np.std(subcluster_tss, axis=1)
+
+            # assume an average across the time series is representative
+            avg_std = np.mean(stds)
+
+            # note the variance for the current cluster
+            variances[int(label)] = avg_std
+
+        idx = np.argsort(variances)
+        orig = np.arange(n_clusters)
+        mapping = dict(zip(orig, idx))
+
+        ordered_labels = np.copy(labels)
+        for key in mapping:
+            ordered_labels[labels == key] = mapping[key]
+
+        return ordered_labels
 
     def __make_subclust_sizes(self):
         # init empty list
@@ -674,14 +711,14 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
             # will turn subcluster labels into floats
             # close to the integer label of the shape-based cluster
             # this makes for nice intracluster shading
-            interval = 0.4
+            interval = 0.5
             offset = sublabel * (interval / (subclust_sizes[int(label)]-1))
 
             # set the subcluster value for the current index
             subclusters_map[yi, xi] = label - interval/2 + offset
 
         plt.figure()
-        plt.imshow(subclusters_map, origin='lower', cmap='hsv')
+        plt.imshow(subclusters_map, origin='lower', cmap='twilight')
         plt.show()
 
 
