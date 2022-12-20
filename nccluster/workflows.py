@@ -8,6 +8,8 @@ import pandas as pd
 import xarray as xr
 
 from math import log
+from matplotlib.colors import Normalize
+from matplotlib.cm import get_cmap
 from sklearn.cluster import KMeans
 from sklearn.metrics import calinski_harabasz_score, davies_bouldin_score
 #                            silhouette_score
@@ -435,8 +437,6 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         # plot and show results
         self.view_results()
 
-        plt.show()
-
     def _set_ts(self, mask=None):
         # wrapper for setting the time series attribute of this class
         self.ts = self._make_ts()
@@ -497,7 +497,6 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         self.model.fit(dataset)
 
     def view_results(self):
-
         self.fig = plt.figure()
         self._plot_ts_clusters()
         self._map_clusters()
@@ -508,18 +507,21 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         # i.e. to which cluster each time series belongs
         labels = self.model.labels_
         n_clusters = self.model.n_clusters
-
+        norm = Normalize(vmin=0, vmax=n_clusters-1)
+        cmap = get_cmap('viridis')
         # for each cluster/label
-        for label in range(n_clusters):
+        for label in range(0, n_clusters):
             # create a subplot in a table with n_cluster rows and 1 column
             # this subplot is number label+1 because we're counting from 0
             ax = self.fig.add_subplot(n_clusters, 2, 2 * label + 1)
+            color = cmap(norm(label))
             # for every time series that has been assigned this label
-            for xx in self.ts[labels == label]:
+            cluster_tss = self.ts[labels == label]
+            for ts in cluster_tss:
                 # plot with a thin transparent line
-                ax.plot(xx.ravel(), "k-", alpha=.2)
+                ax.plot(ts.ravel(), color=color, alpha=.2)
             # plot the cluster barycenter
-            ax.plot(self.model.cluster_centers_[label].ravel(), "r-")
+            ax.plot(euclidean_barycenter(cluster_tss).ravel(), "r-")
             # label the cluster
             ax.set_title(f'Cluster {label}')
 
