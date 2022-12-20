@@ -654,7 +654,7 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
 
         # prepare an empty array to hold the average variance of each cluster
         n_clusters = int(np.nanmax(labels) + 1)
-        variances = np.zeros(n_clusters)
+        order_scores = np.zeros(n_clusters)
 
         # for every non-nan label
         for label in np.unique(labels[~np.isnan(labels)]):
@@ -671,15 +671,12 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
             subcluster_tss = np.array(subcluster_tss)
 
             # compute the stddev along the time axis
-            stds = np.std(subcluster_tss, axis=1)
-
-            # assume an average across the time series is representative
-            avg_std = np.mean(stds)
+            max_val = np.max(subcluster_tss)
 
             # note the variance for the current cluster
-            variances[int(label)] = avg_std
+            order_scores[int(label)] = max_val
 
-        idx = np.argsort(variances)
+        idx = np.argsort(order_scores)
         orig = np.arange(n_clusters)
         mapping = dict(zip(orig, idx))
 
@@ -708,8 +705,6 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
         return subclust_sizes
 
     def __make_subclusters_map(self):
-        # recover the size of each subcluster
-        subclust_sizes = self.__make_subclust_sizes()
 
         # initialise an empty 2D array with the required size
         _, _, y, x = self.age_array.shape
@@ -721,17 +716,21 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
             yi, xi = arg
             # unpack the labels for cluster and subcluster
             label, sublabel = self.labels2step[yi, xi]
-
-            # will turn subcluster labels into floats spanning an interval
-            # around the integer label of the shape-based cluster;
-            # this makes for nice intracluster shading
-            interval = 0.5
-            offset = sublabel * (interval / (subclust_sizes[int(label)]-1))
-
-            # set the subcluster value for the current index
-            subclusters_map[yi, xi] = label - interval/2 + offset
+            colorval = self.__label_sublabel_to_colorval(label, sublabel)
+            subclusters_map[yi, xi] = colorval
 
         return subclusters_map
+
+    def __label_sublabel_to_colorval(self, label, sublabel):
+        # recover the size of each subcluster
+        subclust_sizes = self.__make_subclust_sizes()
+        # will turn subcluster labels into floats spanning an interval
+        # around the integer label of the shape-based cluster;
+        # this makes for nice intracluster shading
+        interval = 0.5
+        offset = sublabel * (interval / (subclust_sizes[int(label)]-1))
+        colorval = label - interval/2 + offset
+        return colorval
 
     def _map_clusters(self):
         # override parent method
@@ -747,6 +746,11 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
 
         subclust_sizes = self.__make_subclust_sizes()
         n_clusters = len(subclust_sizes)
+
+        interval = 0.5
+        norm = Normalize(vmin=0-interval/2, vmax=n_clusters-1+interval/2)
+        cmap = get_cmap('twilight')
+
         # for each cluster/label
         for label in range(n_clusters):
             # create a subplot in a table with n_cluster rows and 1 column
@@ -755,16 +759,19 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
 
             barycenters = []
             for sublabel in range(subclust_sizes[label]):
+                colorval = self.__label_sublabel_to_colorval(label, sublabel)
+                color = cmap(norm(colorval))
+
                 label_match = labels == label
                 sublabel_match = sublabels == sublabel
                 subcluster_tss = self.ts[label_match & sublabel_match]
                 for ts in subcluster_tss:
-                    ax.plot(ts.ravel(), "k-", alpha=.2)
+                    ax.plot(ts.ravel(), color=color)
                 barycenter = euclidean_barycenter(subcluster_tss)
                 barycenters.append(barycenter)
             # need to plot these last else they'd be covered by subcluster ts
             for barycenter in barycenters:
-                ax.plot(barycenter.ravel(), "r-")
+                ax.plot(barycenter.ravel(), "r-", linewidth=0.5)
             # label the cluster
             ax.set_title(f'Cluster {label}')
 
