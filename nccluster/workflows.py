@@ -15,6 +15,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import MinMaxScaler
 from sktime.clustering.k_medoids import TimeSeriesKMedoids
 from tqdm import tqdm
+from tslearn.barycenters import euclidean_barycenter
 from tslearn.clustering import TimeSeriesKMeans
 from tslearn.preprocessing import TimeSeriesScalerMeanVariance
 from tslearn.utils import to_time_series_dataset, to_sktime_dataset
@@ -580,14 +581,17 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
 
     def run(self):
         print("[i] This workflow will override the config setting for scaling")
+        # set scaling on to form shape-based clusters
         self.config['timeseries']['scaling'] = 'True'
         self.fit_model()
-        # self.view_results()
-        self.config['timeseries']['scaling'] = 'False'
-        self.labels2step = self.make_subclusters()
-        self.map_subclusters()
 
-    def make_subclusters(self):
+        # set scaling off to form amplitude-based subclusters
+        self.config['timeseries']['scaling'] = 'False'
+        self.labels2step = self.__make_subclusters()
+
+        self.view_results()
+
+    def __make_subclusters(self):
         # scaling should be off to make amplitude-based subclusters
         # but this is not enforced in case shape-based subclustering is desired
         if self.config['timeseries'].getboolean('scaling'):
@@ -596,7 +600,7 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
         # some useful variables
         labels = self._make_labels_shaped()
         n_clusters = int(self.config['timeseries']['n_clusters'])
-        time_steps, _, y, x = self.age_array.shape
+        _, _, y, x = self.age_array.shape
 
         # we'll save the cluster and subcluster assignments to this array
         labels2step = np.full((y, x, 2), np.nan)
@@ -607,16 +611,7 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
         # for each shape cluster
         for label in range(0, n_clusters):
 
-            # mask all the points not belonging to this cluster
-            cluster_mask = (labels != label)
-
-            # repeat the mask for each time step and set it
-            cluster_mask = np.array([cluster_mask])
-            cluster_mask = np.repeat(cluster_mask, time_steps, axis=0)
-            self.mask = cluster_mask
-
-            # re-buld the time series dataset (now restricted to this cluster)
-            self._set_ts()
+            self.__mask_cluster(labels, label)
 
             # run algorithm again on these points, without normalisation
             self.fit_model()
@@ -633,7 +628,25 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
                 # set the subcluster label in the two-step map (second column)
                 labels2step[yi, xi, 1] = sublabels[yi, xi]
 
+        # reset the mask  to its original state now we're done with subclusters
+        self.mask = None
+        self._set_ts()
+
+        # return the results
         return labels2step
+
+    def __mask_cluster(self, labels, cluster):
+        time_steps, *_ = self.age_array.shape
+
+        # mask all the points not belonging to this cluster
+        cluster_mask = (labels != cluster)
+
+        # repeat the mask for each time step and set it
+        cluster_mask = np.array([cluster_mask])
+        cluster_mask = np.repeat(cluster_mask, time_steps, axis=0)
+        self.mask = cluster_mask
+        # re-buld the time series dataset (now restricted to this cluster)
+        self._set_ts()
 
     def __reorder_labels(self, labels):
 
@@ -688,12 +701,11 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
                                    self.labels2step[:, :, 1])
 
             # the number of subclusters is the maximum sublabel + 1
-            subclust_sizes.append(np.nanmax(sublabels) + 1)
+            subclust_sizes.append(int(np.nanmax(sublabels)) + 1)
 
         return subclust_sizes
 
-    def map_subclusters(self):
-
+    def __make_subclusters_map(self):
         # recover the size of each subcluster
         subclust_sizes = self.__make_subclust_sizes()
 
@@ -708,8 +720,8 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
             # unpack the labels for cluster and subcluster
             label, sublabel = self.labels2step[yi, xi]
 
-            # will turn subcluster labels into floats
-            # close to the integer label of the shape-based cluster
+            # will turn subcluster labels into floats spanning an interval
+            # around the integer label of the shape-based cluster;
             # this makes for nice intracluster shading
             interval = 0.5
             offset = sublabel * (interval / (subclust_sizes[int(label)]-1))
@@ -717,9 +729,42 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
             # set the subcluster value for the current index
             subclusters_map[yi, xi] = label - interval/2 + offset
 
-        plt.figure()
-        plt.imshow(subclusters_map, origin='lower', cmap='twilight')
-        plt.show()
+        return subclusters_map
+
+    def _map_clusters(self):
+        # override parent method
+        subclusters_map = self.__make_subclusters_map()
+        ax = self.fig.add_subplot(122)
+        ax.imshow(subclusters_map, origin='lower', cmap='twilight')
+
+    def _plot_ts_clusters(self):
+        sublabels = self.labels2step[:, :, 1]
+        sublabels = sublabels[~np.isnan(sublabels)].flatten()
+        labels = self.labels2step[:, :, 0]
+        labels = labels[~np.isnan(labels)].flatten()
+
+        subclust_sizes = self.__make_subclust_sizes()
+        n_clusters = len(subclust_sizes)
+        # for each cluster/label
+        for label in range(n_clusters):
+            # create a subplot in a table with n_cluster rows and 1 column
+            # this subplot is number label+1 because we're counting from 0
+            ax = self.fig.add_subplot(n_clusters, 2, 2 * label + 1)
+
+            barycenters = []
+            for sublabel in range(subclust_sizes[label]):
+                label_match = labels == label
+                sublabel_match = sublabels == sublabel
+                subcluster_tss = self.ts[label_match & sublabel_match]
+                for ts in subcluster_tss:
+                    ax.plot(ts.ravel(), "k-", alpha=.2)
+                barycenter = euclidean_barycenter(subcluster_tss)
+                barycenters.append(barycenter)
+            # need to plot these last else they'd be covered by subcluster ts
+            for barycenter in barycenters:
+                ax.plot(barycenter.ravel(), "r-")
+            # label the cluster
+            ax.set_title(f'Cluster {label}')
 
 
 class KMeansWorkflowBase(Workflow):
