@@ -43,7 +43,7 @@ python examples/workflows_demo.py --method km --config configs/example.conf
 ### Correlation clustering
 1. Run the script:
 ```
-python workflows_demo.py --method corr --config configs/example.conf
+python examples/workflows_demo.py --method corr --config configs/example.conf
 ```
 2. Interaction:
 - upper-left plot is the main view
@@ -60,10 +60,13 @@ python workflows_demo.py --method corr --config configs/example.conf
 ### Timeseries clustering
 1. Run the script:
 ```
-python workflows_demo.py --method ts --config configs/example.conf
+python examples/workflows_demo.py --method ts --config configs/example.conf
 ```
-2. Explanations of plots:
-- the first plot that appears shows the timeseries assigned to each cluster (thin black lines) and the cluster barycenter (red line)
-- the second plot is a map of the clustering results
+For more advanced analysis, the two-step method first detects shape-based clusters in the normalised time series, then splits these further into amplitude-based subclusters:
+```
+python examples/workflows_demo.py --method two --config configs/example.conf
+```
 
-If you can only see one plot, try dragging the window to the side as the plots may overlap.
+2. Explanations of results:
+- the left-hand plot shows the timeseries assigned to each cluster (thin black lines) and the cluster barycenter (red line)
+- the right-hand plot is a map of the clustering results
