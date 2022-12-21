@@ -620,13 +620,7 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
 
             # get the labels for current subcluster
             sublabels = self._make_labels_shaped()
-            plt.figure()
-            plt.imshow(sublabels, origin='lower')
-            plt.show()
             sublabels = self.__reorder_labels(sublabels)
-            plt.figure()
-            plt.imshow(sublabels, origin='lower')
-            plt.show()
 
             # for every grid point that is not nan
             for arg in np.argwhere(~np.isnan(sublabels)):
@@ -661,9 +655,7 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
         # prepare an empty array to hold the average variance of each cluster
         n_clusters = int(np.nanmax(labels) + 1)
         order_scores = np.zeros(n_clusters)
-
-        # for every non-nan label
-        for label in np.unique(labels[~np.isnan(labels)]):
+        for label in range(0, n_clusters):
             # assume at this point self.mask is still set for this cluster
             # so can grab the timeseries array right away
             # and zip it with the labels
@@ -676,13 +668,12 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
             # but need to re-cast this list back into a numpy array
             subcluster_tss = np.array(subcluster_tss)
 
-            avg = np.mean(subcluster_tss)
-
-            order_scores[int(label)] = avg
+            barycenter = np.array(euclidean_barycenter(subcluster_tss))
+            order_scores[label] = np.mean(barycenter)
 
         idx = np.argsort(order_scores)
         orig = np.arange(n_clusters)
-        mapping = dict(zip(orig, idx))
+        mapping = dict(zip(idx, orig))
 
         ordered_labels = np.copy(labels)
         for key in mapping:
