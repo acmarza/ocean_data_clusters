@@ -5,7 +5,7 @@ sys.path.append('.')
 
 from nccluster.workflows import KMeansWorkflow
 from nccluster.workflows import CorrelationWorkflow
-from nccluster.workflows import TSClusteringWorkflow
+from nccluster.workflows import TimeSeriesClusteringWorkflow
 from nccluster.workflows import TwoStepTimeSeriesClusterer
 
 
@@ -27,7 +27,7 @@ def main():
     if args.method == 'km':
         wf = KMeansWorkflow(args.config)
     elif args.method == 'ts':
-        wf = TSClusteringWorkflow(args.config)
+        wf = TimeSeriesClusteringWorkflow(args.config)
     elif args.method == 'corr':
         wf = CorrelationWorkflow(args.config)
     elif args.method == 'two':

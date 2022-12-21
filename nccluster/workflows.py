@@ -285,7 +285,7 @@ class RadioCarbonWorkflow(Workflow):
         print("[i] Computed dc14 from di14c and dic")
 
 
-class TimeseriesWorkflowBase(RadioCarbonWorkflow):
+class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
     '''Base class for workflows involving time series.'''
     def _checkers(self):
         super()._checkers()
@@ -365,7 +365,7 @@ class TimeseriesWorkflowBase(RadioCarbonWorkflow):
         return ts
 
 
-class CorrelationWorkflow(TimeseriesWorkflowBase):
+class CorrelationWorkflow(TimeSeriesWorkflowBase):
     '''A workflow for visualising correlations between time series at each
     grid point in the surface ocean.'''
     def _checkers(self):
@@ -379,7 +379,7 @@ class CorrelationWorkflow(TimeseriesWorkflowBase):
 
     def run(self):
         # run parent workflow (time series plot)
-        TimeseriesWorkflowBase.run(self)
+        TimeSeriesWorkflowBase.run(self)
 
         # keyword arguments to be passed to CorrelationViewer
         kwargs = self.config['correlation']
@@ -414,7 +414,7 @@ class CorrelationWorkflow(TimeseriesWorkflowBase):
         )
 
 
-class TSClusteringWorkflow(TimeseriesWorkflowBase):
+class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
     '''A workflow to find clusters in the surface ocean based on the
     radiocarbon age time series at each grid point.'''
     def _checkers(self):
@@ -429,7 +429,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
 
     def run(self):
         # run the parent workflow (plotting all time series)
-        TimeseriesWorkflowBase.run(self)
+        TimeSeriesWorkflowBase.run(self)
 
         # get the model with label assignments and barycenters
         self.fit_model()
@@ -578,7 +578,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
         print(f"[i] Saved labels to {filename}")
 
 
-class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
+class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
 
     def run(self):
         print("[i] This workflow will override the config setting for scaling")
@@ -762,6 +762,10 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
             # need to plot these last else they'd be covered by subcluster ts
             for barycenter in barycenters:
                 ax.plot(barycenter.ravel(), "r-", linewidth=0.5)
+
+
+class HistogramWorkflow(TimeSeriesWorkflowBase):
+    pass
 
 
 class KMeansWorkflowBase(Workflow):

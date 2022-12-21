@@ -3,7 +3,7 @@ import sys
 
 sys.path.append('.')
 
-from nccluster.workflows import TSClusteringWorkflow
+from nccluster.workflows import TimeSeriesClusteringWorkflow
 
 
 def main():
@@ -15,7 +15,7 @@ def main():
     parser.add_argument('-f', '--file',
                         help="save file (.nc) for resulting labels")
     args = parser.parse_args()
-    wf = TSClusteringWorkflow(args.config)
+    wf = TimeSeriesClusteringWorkflow(args.config)
     wf.fit_model()
     wf.save_labels_data_array(args.file, args.long_name)
 
