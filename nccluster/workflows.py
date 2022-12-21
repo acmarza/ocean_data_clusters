@@ -620,7 +620,13 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
 
             # get the labels for current subcluster
             sublabels = self._make_labels_shaped()
+            plt.figure()
+            plt.imshow(sublabels, origin='lower')
+            plt.show()
             sublabels = self.__reorder_labels(sublabels)
+            plt.figure()
+            plt.imshow(sublabels, origin='lower')
+            plt.show()
 
             # for every grid point that is not nan
             for arg in np.argwhere(~np.isnan(sublabels)):
@@ -670,11 +676,9 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
             # but need to re-cast this list back into a numpy array
             subcluster_tss = np.array(subcluster_tss)
 
-            # compute the stddev along the time axis
-            max_val = np.max(subcluster_tss)
+            avg = np.mean(subcluster_tss)
 
-            # note the variance for the current cluster
-            order_scores[int(label)] = max_val
+            order_scores[int(label)] = avg
 
         idx = np.argsort(order_scores)
         orig = np.arange(n_clusters)
