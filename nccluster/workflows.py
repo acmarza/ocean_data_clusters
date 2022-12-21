@@ -665,11 +665,7 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
             # to retrieve just the time series with the current label
             subcluster_tss = [ts for (ts, ll) in cluster_tss if ll == label]
 
-            # but need to re-cast this list back into a numpy array
-            subcluster_tss = np.array(subcluster_tss)
-
-            barycenter = np.array(euclidean_barycenter(subcluster_tss))
-            order_scores[label] = np.mean(barycenter)
+            order_scores[label] = np.mean(np.array(subcluster_tss))
 
         idx = np.argsort(order_scores)
         orig = np.arange(n_clusters)
