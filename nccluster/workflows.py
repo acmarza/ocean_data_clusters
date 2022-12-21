@@ -498,6 +498,7 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
 
     def view_results(self):
         self.fig = plt.figure()
+        plt.rcParams['figure.constrained_layout.use'] = True
         self._plot_ts_clusters()
         self._map_clusters()
         plt.show()
@@ -522,8 +523,6 @@ class TSClusteringWorkflow(TimeseriesWorkflowBase):
                 ax.plot(ts.ravel(), color=color, alpha=.2)
             # plot the cluster barycenter
             ax.plot(euclidean_barycenter(cluster_tss).ravel(), "r-")
-            # label the cluster
-            ax.set_title(f'Cluster {label}')
 
     def _map_clusters(self):
         # get the 2D labels array
@@ -763,8 +762,6 @@ class TwoStepTimeSeriesClusterer(TSClusteringWorkflow):
             # need to plot these last else they'd be covered by subcluster ts
             for barycenter in barycenters:
                 ax.plot(barycenter.ravel(), "r-", linewidth=0.5)
-            # label the cluster
-            ax.set_title(f'Cluster {label}')
 
 
 class KMeansWorkflowBase(Workflow):
