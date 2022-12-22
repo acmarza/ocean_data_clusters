@@ -162,7 +162,7 @@ unsaved changes to {self.config_path}.")
 
         # optionally limit analysis to the ocean surface (level 0):
         if self.config['default'].getboolean('surface_only'):
-            self._ds.subset(levels=[0, 0])
+            self._ds.top()
 
         # optionally limit analysis to an interval of time steps
         if self.config.has_option('default', 'timesteps_subset'):
@@ -465,10 +465,13 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         TimeSeriesWorkflowBase.run(self)
 
         # get the model with label assignments and barycenters
-        self.fit_model()
+        self.cluster()
 
         # plot and show results
         self.view_results()
+
+    def cluster(self):
+        self._fit_model()
 
     def _set_ts(self, mask=None):
         # wrapper for setting the time series attribute of this class
@@ -506,7 +509,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
             confirm_msg='[i] Labels variable long name: '
         )
 
-    def fit_model(self):
+    def _fit_model(self):
         # define the keyword arguments to pass to the model
         kwargs = {
             'n_clusters': self.config['timeseries'].getint('n_clusters'),
@@ -627,15 +630,17 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
 
     def run(self):
         print("[i] This workflow will override the config setting for scaling")
+        self.cluster()
+        self.view_results()
+
+    def cluster(self):
         # set scaling on to form shape-based clusters
         self.config['timeseries']['scaling'] = 'True'
-        self.fit_model()
+        self._fit_model()
 
         # set scaling off to form amplitude-based subclusters
         self.config['timeseries']['scaling'] = 'False'
         self.labels2step = self.__make_subclusters()
-
-        self.view_results()
 
     def __make_subclusters(self):
         # scaling should be off to make amplitude-based subclusters
@@ -660,7 +665,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
             self.__mask_cluster(labels, label)
 
             # run algorithm again on these points, without normalisation
-            self.fit_model()
+            self._fit_model()
 
             # get the labels for current subcluster
             sublabels = self._make_labels_shaped()
@@ -851,7 +856,7 @@ class dRWorkflow(RadioCarbonWorkflow):
         ds_tmp = self._ds.copy()
 
         # subset the copy to surface
-        ds_tmp.subset(levels=[0, 0])
+        ds_tmp.top()
 
         # compute R-age difference from surface mean
         ds_tmp.assign(dR=lambda x:
