@@ -77,11 +77,16 @@ unsaved changes to {self.config_path}.")
                              confirm_msg="[i] Got value: ",
                              default=None,
                              required=True,
-                             isbool=False):
+                             isbool=False,
+                             force=False):
         # convenience function to check if an option is defined in the config;
         # if not, interactively get its value and add to config
         try:
-            # ideally the value can be read from config, confirming it exists
+            # don't attempt to read from config if option is forced
+            # move straight to except block where default should be applied
+            if force:
+                raise KeyError
+            # otherwise try to read value from config
             value = self.config[section][option]
         except KeyError:
             # do nothing if option missing from config and not required
@@ -120,11 +125,25 @@ unsaved changes to {self.config_path}.")
             confirm_msg='[i] NetCDF file(s): '
         )
 
-    def __check_subset(self):
+    def __check_vars_subset(self):
         self._check_config_option(
             'default', 'subset',
             required=False,
             confirm_msg="[i] Data will be subset keeping only variables: "
+        )
+
+    def __check_surface_only(self):
+        self._check_config_option(
+            'default', 'surface_only',
+            default=False, isbool=True,
+            confirm_msg='[i] Restrict analysis to ocean surface: '
+        )
+
+    def __check_timesteps_subset(self):
+        self._check_config_option(
+            'default', 'timesteps_subset',
+            required=False,
+            confirm_msg='[i] Data will be subset to the following timesteps: '
         )
 
     def __load_ds(self):
@@ -136,10 +155,20 @@ unsaved changes to {self.config_path}.")
 
     def _preprocess_ds(self):
         # optionally limit analysis to a subset of variables
-        if self.config.has_option('default', 'subset'):
-            subset = self.config['default']['subset'].split(",")
+        if self.config.has_option('default', 'vars_subset'):
+            subset = self.config['default']['vars_subset'].split(",")
             print("[i] Subsetting data")
             self._ds.subset(variable=subset)
+
+        # optionally limit analysis to the ocean surface (level 0):
+        if self.config['default'].getboolean('surface_only'):
+            self._ds.subset(levels=[0, 0])
+
+        # optionally limit analysis to an interval of time steps
+        if self.config.has_option('default', 'timesteps_subset'):
+            str_opt = self.config['default']['timesteps_subset']
+            start, end = str_opt.strip(['[', ']']).split(",")
+            self.ds.subset(timesteps=[start, end])
 
         # merge datasets if multiple files specified in config
         try:
@@ -155,7 +184,8 @@ unsaved changes to {self.config_path}.")
 
     def _checkers(self):
         self.__check_nc_files()
-        self.__check_subset()
+        self.__check_vars_subset()
+        self.__check_surface_only()
 
     def _setters(self):
         print("[i] All attributes have been initialized")
@@ -209,11 +239,11 @@ unsaved changes to {self.config_path}.")
         except IndexError:
             print(f"[!] {var_to_plot} not found; check spelling")
 
-    def _ds_var_to_array(self, var_name):
+    def ds_var_to_array(self, var_name):
         # some  manipulation to isolate age data and cast it into a useful form
         # make a copy of the original dataset to subset to one variable
         ds_tmp = self._ds.copy()
-        ds_tmp.subset(variable=var_name)
+        ds_tmp.subset(variables=var_name)
 
         # convert to xarray and extract the numpy array of values
         as_xr = ds_tmp.to_xarray()
@@ -305,7 +335,7 @@ class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
 
     def _setters(self):
         self.mask = None
-        self._age_array = self._ds_var_to_array('local_age')
+        self._age_array = self.ds_var_to_array('local_age')
 
     def run(self):
         # this base class simply plots all the time series if asked to
@@ -806,29 +836,17 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         return data_array
 
 
-class HistogramWorkflow(RadioCarbonWorkflow):
+class dRWorkflow(RadioCarbonWorkflow):
 
-    def _checkers(self):
-        super()._checkers()
-        self.__check_clusters_file()
+    def _preprocess_ds(self):
+        # compute local age from radiocarbon
+        super()._preprocess_ds()
 
-    def __check_clusters_file(self):
-        self._check_config_option(
-            'histogram', 'clustering_results_file',
-            missing_msg='[!] You have not specified a path to load clustering\
-            results',
-            input_msg='[>] Path of file with cluster and subcluster labels: ',
-            confirm_msg='[i] Will read cluster assignments from '
-        )
+        # define new surface variable, dR = local_age - mean surface age
+        self.__add_dR_to_ds()
 
-    def _setters(self):
-        super()._setters()
-        self.dR_array = self.__make_dR_array()
-        self.__subclusters_from_file()
-
-    def __make_dR_array(self):
+    def __add_dR_to_ds(self):
         # copy the original dataset to a temporary variable
-        # since we'll only modify the copy this is not in preprocess_ds
         ds_tmp = self._ds.copy()
 
         # subset the copy to surface
@@ -838,15 +856,11 @@ class HistogramWorkflow(RadioCarbonWorkflow):
         ds_tmp.assign(dR=lambda x:
                       x.local_age - spatial_mean(x.local_age))
 
-        # convert to xarray
-        as_xr = ds_tmp.to_xarray()
+        # drop all other vars
+        ds_tmp.subset(variables='dR')
 
-        # isolate the dR array
-        dRs = as_xr['dR'].values
-
-        print('[i] Computed dRs')
-
-        return dRs
+        # merge into the original dataset
+        self._ds = nc.merge(self._ds, ds_tmp)
 
     def __subclusters_from_file(self):
         dataset = xr.open_dataset(self.config['histogram']

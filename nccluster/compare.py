@@ -1,12 +1,13 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import nctoolkit as nc
+import numpy as np
 import xarray as xr
 import xesmf as xe
 
 from matplotlib.colors import Normalize
 from matplotlib.cm import get_cmap
 from matplotlib_venn import venn2
-from nccluster.workflows import HistogramWorkflow
+from nccluster.workflows import dRWorkflow
 
 
 class ClusterMatcher:
@@ -199,11 +200,23 @@ class ClusterMatcher:
 
 class DdR_Histograms:
 
-    def __init__(self, config_path1, config_path2):
-        self.wf1 = HistogramWorkflow(config_path1)
-        self.wf2 = HistogramWorkflow(config_path2)
+    def __init__(self, config_path1, config_path2, labels_savefile):
+        # initialise workflows (letting them compute surface ocean dR)
+        wf1 = dRWorkflow(config_path1)
+        wf2 = dRWorkflow(config_path2)
 
-    def compute_delta_dR(self):
-        dR1 = self.wf1.dR_array.flatten()
-        dR2 = self.wf2.dR_array.flatten()
-        return dR1 - dR2
+        # load in the subcluster assignments
+        labels_ds = nc.DataSet(labels_savefile)
+
+        # regrid everything to second workflow's dataset
+        wf1.regrid_to_ds(wf2._ds)
+        labels_ds.regrid(wf2._ds)
+
+        # extract the dR arrays
+        dR1 = wf1.ds_var_to_array('dR')
+        dR2 = wf2.ds_var_to_array('dR')
+
+        print(dR1.shape)
+        print(dR2.shape)
+
+#        self.DdR = dR1 - dR2
