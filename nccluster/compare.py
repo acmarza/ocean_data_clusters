@@ -6,6 +6,7 @@ import xesmf as xe
 from matplotlib.colors import Normalize
 from matplotlib.cm import get_cmap
 from matplotlib_venn import venn2
+from nccluster.workflows import HistogramWorkflow
 
 
 class ClusterMatcher:
@@ -194,3 +195,15 @@ class ClusterMatcher:
         shape = self.labels_left.values.shape
         self.labels_left.values = np.reshape(labels_left_flat, shape)
         self.labels_right.values = np.reshape(labels_right_flat, shape)
+
+
+class DdR_Histograms:
+
+    def __init__(self, config_path1, config_path2):
+        self.wf1 = HistogramWorkflow(config_path1)
+        self.wf2 = HistogramWorkflow(config_path2)
+
+    def compute_delta_dR(self):
+        dR1 = self.wf1.dR_array.flatten()
+        dR2 = self.wf2.dR_array.flatten()
+        return dR1 - dR2

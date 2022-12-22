@@ -132,19 +132,19 @@ unsaved changes to {self.config_path}.")
 
         # get a list of file paths and create the DataSet object
         nc_files = self.config['default']['nc_files'].split(",")
-        self.ds = nc.DataSet(nc_files)
+        self._ds = nc.DataSet(nc_files)
 
     def _preprocess_ds(self):
         # optionally limit analysis to a subset of variables
         if self.config.has_option('default', 'subset'):
             subset = self.config['default']['subset'].split(",")
             print("[i] Subsetting data")
-            self.ds.subset(variable=subset)
+            self._ds.subset(variable=subset)
 
         # merge datasets if multiple files specified in config
         try:
             print("[i] Merging datasets")
-            self.ds.merge()
+            self._ds.merge()
         except Exception:
             print("[fatal] You have specified multiple netCDF files to use",
                   "but these could not be merged for further analysis.",
@@ -160,9 +160,9 @@ unsaved changes to {self.config_path}.")
     def _setters(self):
         print("[i] All attributes have been initialized")
 
-    def regrid_to_ds(self, tarset_ds):
+    def regrid_to_ds(self, target_ds):
         # interpolate/extrapolate the data to fit the grid of a target dataset
-        self.ds.regrid(tarset_ds)
+        self._ds.regrid(target_ds)
         # features and time series need to be re-created for new grid
         self._setters()
 
@@ -171,10 +171,10 @@ unsaved changes to {self.config_path}.")
 
     def list_plottable_vars(self):
         # get an alphabetical list of plottable variables
-        plottable_vars = self.ds.variables
+        plottable_vars = self._ds.variables
 
         # easy reference to a dataframe containing useful info on variables
-        df = self.ds.contents
+        df = self._ds.contents
 
         # list plottable variables for the user to inspect
         for i, var in enumerate(plottable_vars):
@@ -189,7 +189,7 @@ unsaved changes to {self.config_path}.")
     def plot_var(self, var_to_plot):
         try:
             # get the data as an array
-            ds_tmp = self.ds.copy()
+            ds_tmp = self._ds.copy()
             ds_tmp.subset(variables=var_to_plot)
             var_xr = ds_tmp.to_xarray()
             data_to_plot = var_xr[var_to_plot].values
@@ -209,6 +209,18 @@ unsaved changes to {self.config_path}.")
         except IndexError:
             print(f"[!] {var_to_plot} not found; check spelling")
 
+    def _ds_var_to_array(self, var_name):
+        # some  manipulation to isolate age data and cast it into a useful form
+        # make a copy of the original dataset to subset to one variable
+        ds_tmp = self._ds.copy()
+        ds_tmp.subset(variable=var_name)
+
+        # convert to xarray and extract the numpy array of values
+        as_xr = ds_tmp.to_xarray()
+        as_array = as_xr[var_name].values
+
+        return as_array
+
 
 class RadioCarbonWorkflow(Workflow):
     '''Base for workflows involving dc14 and radiocarbon age calculations.'''
@@ -223,13 +235,13 @@ class RadioCarbonWorkflow(Workflow):
         self.__rename_vars()
 
         # compute dc14 if not present in dataset and we have the necessary vars
-        if 'dic' in self.ds.variables and\
-                'di14c' in self.ds.variables and\
-                'dc14' not in self.ds.variables:
+        if 'dic' in self._ds.variables and\
+                'di14c' in self._ds.variables and\
+                'dc14' not in self._ds.variables:
             self.__compute_dc14()
 
         # compute radiocarbon ages if dc14 exists in dataset
-        if 'dc14' in self.ds.variables:
+        if 'dc14' in self._ds.variables:
             self.__check_mean_radiocarbon_lifetime()
             self.__check_atm_dc14()
             self.__compute_local_age()
@@ -249,7 +261,7 @@ class RadioCarbonWorkflow(Workflow):
     def __rename_vars(self):
         # rename variables to be used in calculations for easy reference
         for key, value in self.__rename_dict.items():
-            self.ds.rename({value: key})
+            self._ds.rename({value: key})
             print(f"[i] Renamed variable {value} to {key}")
 
     def __check_mean_radiocarbon_lifetime(self):
@@ -273,15 +285,15 @@ class RadioCarbonWorkflow(Workflow):
         mean_radio_life =\
             self.config['radiocarbon'].getint('mean_radiocarbon_lifetime')
         atm_dc14 = self.config['radiocarbon'].getint('atm_dc14')
-        self.ds.assign(local_age=lambda x: -mean_radio_life*log(
-                           (x.dc14/1000 + 1)/(atm_dc14/1000 + 1))
+        self._ds.assign(local_age=lambda x: -mean_radio_life*log(
+            (x.dc14/1000 + 1)/(atm_dc14/1000 + 1))
                        )
         print("[i] Converted dc14 to age")
 
     def __compute_dc14(self):
         # from dic and di14c
-        self.ds.assign(dc14=lambda x:
-                       (x.di14c/x.dic-1)*1000)
+        self._ds.assign(dc14=lambda x:
+                        (x.di14c/x.dic-1)*1000)
         print("[i] Computed dc14 from di14c and dic")
 
 
@@ -293,24 +305,12 @@ class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
 
     def _setters(self):
         self.mask = None
-        self.age_array = self._ds_var_to_array('local_age')
+        self._age_array = self._ds_var_to_array('local_age')
 
     def run(self):
         # this base class simply plots all the time series if asked to
         if self.config['timeseries'].getboolean('plot_all_ts'):
             self.plot_all_ts()
-
-    def _ds_var_to_array(self, var_name):
-        # some  manipulation to isolate age data and cast it into a useful form
-        # make a copy of the original dataset to subset to one variable
-        ds_tmp = self.ds.copy()
-        ds_tmp.subset(variable=var_name)
-
-        # convert to xarray and extract the numpy array of values
-        as_xr = ds_tmp.to_xarray()
-        as_array = as_xr[var_name].values
-
-        return as_array
 
     def __check_plot_all_ts_bool(self):
         missing_msg = '[!] You have not specified whether to show\
@@ -346,7 +346,7 @@ class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
         # remember age_array.shape = (t, z, y, x)
         # we want ts_array.shape = (n, t) at z=0 with n=x*y
         # note the -1 in np.reshape tells it to figure out n on its own
-        ts_array = np.ma.masked_array(self.age_array[:, 0], self.mask)
+        ts_array = np.ma.masked_array(self._age_array[:, 0], self.mask)
         ts_array = np.reshape(ts_array,
                               newshape=(ts_array.shape[0], -1)).T
         return ts_array
@@ -385,7 +385,8 @@ class CorrelationWorkflow(TimeSeriesWorkflowBase):
         kwargs = self.config['correlation']
 
         # initialise and show CorrelationViewer
-        self.corrviewer = CorrelationViewer(self.age_array, 'R-ages', **kwargs)
+        self.corrviewer = CorrelationViewer(self._age_array,
+                                            'R-ages', **kwargs)
         plt.show()
 
     def __check_pvalues_bool(self):
@@ -550,7 +551,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
 
         # convert to array of labels and reshape into 2D for map
         labels_flat = np.ma.masked_array(df['labels'])
-        _, _, y, x = self.age_array.shape
+        _, _, y, x = self._age_array.shape
         labels_shaped = np.reshape(labels_flat, [y, x])
         return labels_shaped
 
@@ -572,7 +573,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
     def _make_xy_coords(self):
 
         # copy the coords of the original dataset, but keep only x and y
-        all_coords = self.ds.to_xarray().coords
+        all_coords = self._ds.to_xarray().coords
         coords = {}
         for key in all_coords:
             try:
@@ -614,7 +615,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         # some useful variables
         labels = self._make_labels_shaped()
         n_clusters = int(self.config['timeseries']['n_clusters'])
-        _, _, y, x = self.age_array.shape
+        _, _, y, x = self._age_array.shape
 
         # we'll save the cluster and subcluster assignments to this array
         labels2step = np.full((y, x, 2), np.nan)
@@ -650,7 +651,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         return labels2step
 
     def __mask_cluster(self, labels, cluster):
-        time_steps, *_ = self.age_array.shape
+        time_steps, *_ = self._age_array.shape
 
         # mask all the points not belonging to this cluster
         cluster_mask = (labels != cluster)
@@ -710,11 +711,11 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
     def __make_subclusters_map(self):
 
         # initialise an empty 2D array with the required size
-        _, _, y, x = self.age_array.shape
+        _, _, y, x = self._age_array.shape
         subclusters_map = np.full((y, x), np.nan)
 
         # for every grid point in the surface slice that is not nan
-        for arg in np.argwhere(~np.isnan(self.age_array[0, 0])):
+        for arg in np.argwhere(~np.isnan(self._age_array[0, 0])):
             # unpack the index
             yi, xi = arg
             # unpack the labels for cluster and subcluster
@@ -805,7 +806,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         return data_array
 
 
-class HistogramWorkflow(TimeSeriesWorkflowBase):
+class HistogramWorkflow(RadioCarbonWorkflow):
 
     def _checkers(self):
         super()._checkers()
@@ -822,27 +823,36 @@ class HistogramWorkflow(TimeSeriesWorkflowBase):
 
     def _setters(self):
         super()._setters()
-        self.dR_array = self._ds_var_to_array('dR')
+        self.dR_array = self.__make_dR_array()
         self.__subclusters_from_file()
+
+    def __make_dR_array(self):
+        # copy the original dataset to a temporary variable
+        # since we'll only modify the copy this is not in preprocess_ds
+        ds_tmp = self._ds.copy()
+
+        # subset the copy to surface
+        ds_tmp.subset(levels=[0, 0])
+
+        # compute R-age difference from surface mean
+        ds_tmp.assign(dR=lambda x:
+                      x.local_age - spatial_mean(x.local_age))
+
+        # convert to xarray
+        as_xr = ds_tmp.to_xarray()
+
+        # isolate the dR array
+        dRs = as_xr['dR'].values
+
+        print('[i] Computed dRs')
+
+        return dRs
 
     def __subclusters_from_file(self):
         dataset = xr.open_dataset(self.config['histogram']
                                   ['clustering_results_file'])
         self.labels = dataset['labels'].values
         self.sublabels = dataset['sublabels'].values
-
-    def _preprocess_ds(self):
-        super()._preprocess_ds()
-        self.__compute_dRs()
-
-    def __compute_dRs(self):
-        self.ds.assign(dR=lambda x:
-                       x.local_age - spatial_mean(x.local_age))
-        print('[i] Computed dRs')
-
-    def run(self):
-        plt.imshow(self.dR_array[0, 0], origin='lower')
-        plt.show()
 
 
 class KMeansWorkflowBase(Workflow):
@@ -924,7 +934,7 @@ class KMeansWorkflowBase(Workflow):
 
     def __set_features(self):
         # some data manipulation to cast it in a useful xarray form
-        ds_tmp = self.ds.copy()
+        ds_tmp = self._ds.copy()
         ds_tmp.subset(variables=self.selected_vars)
         nc_data = ds_tmp.to_xarray()
 
