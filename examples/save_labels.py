@@ -17,7 +17,7 @@ def main():
     args = parser.parse_args()
     wf = TimeSeriesClusteringWorkflow(args.config)
     wf.fit_model()
-    wf.save_labels_data_array(args.file, args.long_name)
+    wf.save_clustering_results(args.file, args.long_name)
 
 
 if __name__ == "__main__":

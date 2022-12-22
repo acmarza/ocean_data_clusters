@@ -293,24 +293,24 @@ class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
 
     def _setters(self):
         self.mask = None
-        self.__set_age_array()
+        self.age_array = self._ds_var_to_array('local_age')
 
     def run(self):
         # this base class simply plots all the time series if asked to
         if self.config['timeseries'].getboolean('plot_all_ts'):
             self.plot_all_ts()
 
-    def __set_age_array(self):
+    def _ds_var_to_array(self, var_name):
         # some  manipulation to isolate age data and cast it into a useful form
         # make a copy of the original dataset to subset to one variable
         ds_tmp = self.ds.copy()
-        ds_tmp.subset(variable='local_age')
+        ds_tmp.subset(variable=var_name)
 
         # convert to xarray and extract the numpy array of values
-        age_xr = ds_tmp.to_xarray()
-        age_array = age_xr['local_age'].values
+        as_xr = ds_tmp.to_xarray()
+        as_array = as_xr[var_name].values
 
-        self.age_array = age_array
+        return as_array
 
     def __check_plot_all_ts_bool(self):
         missing_msg = '[!] You have not specified whether to show\
@@ -422,6 +422,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         self.__check_n_clusters()
         self.__check_clustering_method()
         self.__check_scaling_bool()
+        self.__check_labels_long_name()
 
     def _setters(self):
         super()._setters()
@@ -463,6 +464,14 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
             default=False,
             isbool=True,
             confirm_msg="[i] Proceeding with scaling bool = "
+        )
+
+    def __check_labels_long_name(self):
+        self._check_config_option(
+            'default', 'labels_long_name',
+            required=False,
+            default='Time series clustering results',
+            confirm_msg='[i] Labels variable long name: '
         )
 
     def fit_model(self):
@@ -545,10 +554,22 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         labels_shaped = np.reshape(labels_flat, [y, x])
         return labels_shaped
 
-    def make_labels_data_array(self,
-                               long_name='time series clustering results'):
+    def _make_labels_data_array(self):
+
         # get the raw labels array
         labels_shaped = self._make_labels_shaped()
+        coords = self._make_xy_coords()
+        long_name = self.config['default']['labels_long_name']
+        # create the data array from our labels and
+        # the x-y coords copied from the original dataset
+        data_array = xr.DataArray(data=labels_shaped,
+                                  coords=coords,
+                                  name='labels',
+                                  attrs={'long_name': long_name}
+                                  )
+        return data_array
+
+    def _make_xy_coords(self):
 
         # copy the coords of the original dataset, but keep only x and y
         all_coords = self.ds.to_xarray().coords
@@ -562,19 +583,11 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         # arcane magic to put the coordinates in reverse order
         # because otherwise DataArray expects the transpose of what we have
         coords = dict(reversed(list(coords.items())))
+        return coords
 
-        # create the data array from our labels and
-        # the x-y coords copied from the original dataset
-        data_array = xr.DataArray(data=labels_shaped,
-                                  coords=coords,
-                                  name='labels',
-                                  attrs={'long_name': long_name}
-                                  )
-        return data_array
-
-    def save_labels_data_array(self, filename, long_name):
-        da = self.make_labels_data_array(long_name)
-        da.to_netcdf(filename)
+    def save_clustering_results(self, filename):
+        darray = self._make_labels_data_array()
+        darray.to_netcdf(filename)
         print(f"[i] Saved labels to {filename}")
 
 
@@ -763,9 +776,73 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
             for barycenter in barycenters:
                 ax.plot(barycenter.ravel(), "r-", linewidth=0.5)
 
+    def save_clustering_results(self, filename):
+        labels_darray = self._make_labels_data_array(step=0)
+        sublabels_darray = self._make_labels_data_array(step=1)
+        coords = self._make_xy_coords()
+        dataset = xr.Dataset({'labels': labels_darray,
+                              'sublabels': sublabels_darray},
+                             coords=coords
+                             )
+
+        dataset.to_netcdf(filename)
+        print(f"[i] Saved labels and sublabels to {filename}")
+
+    def _make_labels_data_array(self, step=0):
+        # override
+        # get the raw labels array
+        labels_shaped = self.labels2step[:, :, step]
+        coords = self._make_xy_coords()
+        option = 'labels_long_name' if step == 0 else 'sublabels_long_name'
+        long_name = self.config['default'][option]
+        # create the data array from our labels and
+        # the x-y coords copied from the original dataset
+        data_array = xr.DataArray(data=labels_shaped,
+                                  coords=coords,
+                                  name='labels',
+                                  attrs={'long_name': long_name}
+                                  )
+        return data_array
+
 
 class HistogramWorkflow(TimeSeriesWorkflowBase):
-    pass
+
+    def _checkers(self):
+        super()._checkers()
+        self.__check_clusters_file()
+
+    def __check_clusters_file(self):
+        self._check_config_option(
+            'histogram', 'clustering_results_file',
+            missing_msg='[!] You have not specified a path to load clustering\
+            results',
+            input_msg='[>] Path of file with cluster and subcluster labels: ',
+            confirm_msg='[i] Will read cluster assignments from '
+        )
+
+    def _setters(self):
+        super()._setters()
+        self.dR_array = self._ds_var_to_array('dR')
+        self.__subclusters_from_file()
+
+    def __subclusters_from_file(self):
+        dataset = xr.open_dataset(self.config['histogram']
+                                  ['clustering_results_file'])
+        self.labels = dataset['labels'].values
+        self.sublabels = dataset['sublabels'].values
+
+    def _preprocess_ds(self):
+        super()._preprocess_ds()
+        self.__compute_dRs()
+
+    def __compute_dRs(self):
+        self.ds.assign(dR=lambda x:
+                       x.local_age - spatial_mean(x.local_age))
+        print('[i] Computed dRs')
+
+    def run(self):
+        plt.imshow(self.dR_array[0, 0], origin='lower')
+        plt.show()
 
 
 class KMeansWorkflowBase(Workflow):
