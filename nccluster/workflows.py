@@ -167,8 +167,8 @@ unsaved changes to {self.config_path}.")
         # optionally limit analysis to an interval of time steps
         if self.config.has_option('default', 'timesteps_subset'):
             str_opt = self.config['default']['timesteps_subset']
-            start, end = str_opt.strip(['[', ']']).split(",")
-            self.ds.subset(timesteps=[start, end])
+            start, end = str_opt.strip('[]').split(",")
+            self._ds.subset(timesteps=range(int(start), int(end)))
 
         # merge datasets if multiple files specified in config
         try:
@@ -186,6 +186,7 @@ unsaved changes to {self.config_path}.")
         self.__check_nc_files()
         self.__check_vars_subset()
         self.__check_surface_only()
+        self.__check_timesteps_subset()
 
     def _setters(self):
         print("[i] All attributes have been initialized")
