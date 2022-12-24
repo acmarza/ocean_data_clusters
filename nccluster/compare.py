@@ -198,7 +198,7 @@ class ClusterMatcher:
         self.labels_right.values = np.reshape(labels_right_flat, shape)
 
 
-class DdR_Histograms:
+class DdR_Histogram:
 
     def __init__(self, config_path1, config_path2, labels_savefile):
         # initialise workflows (letting them compute surface ocean dR)
@@ -210,13 +210,15 @@ class DdR_Histograms:
 
         # regrid everything to second workflow's dataset
         wf1.regrid_to_ds(wf2._ds)
-        labels_ds.regrid(wf2._ds)
+
+        # use nearest neighbor (not interpolate!) to regrid integer labels
+        labels_ds.regrid(wf2._ds, method="nn")
 
         # extract the dR arrays
-        dR1 = wf1.ds_var_to_array('dR')
-        dR2 = wf2.ds_var_to_array('dR')
+        self.dR1 = wf1.ds_var_to_array('dR')
+        self.dR2 = wf2.ds_var_to_array('dR')
+        self.labels = labels_ds.to_xarray()['labels'].values
+        self.sublabels = labels_ds.to_xarray()['sublabels'].values
 
-        print(dR1.shape)
-        print(dR2.shape)
-
-#        self.DdR = dR1 - dR2
+    def cluster_hist(self, cluster, time1, time2):
+        DdR = self.dR1[time1, 0] - self.dR2[time2, 0]

@@ -848,31 +848,17 @@ class dRWorkflow(RadioCarbonWorkflow):
         # compute local age from radiocarbon
         super()._preprocess_ds()
 
+        # restrict analysis to surface
+        self._ds.top()
+
         # define new surface variable, dR = local_age - mean surface age
-        self.__add_dR_to_ds()
+        self.__compute_dR()
 
-    def __add_dR_to_ds(self):
-        # copy the original dataset to a temporary variable
-        ds_tmp = self._ds.copy()
-
-        # subset the copy to surface
-        ds_tmp.top()
+    def __compute_dR(self):
 
         # compute R-age difference from surface mean
-        ds_tmp.assign(dR=lambda x:
-                      x.local_age - spatial_mean(x.local_age))
-
-        # drop all other vars
-        ds_tmp.subset(variables='dR')
-
-        # merge into the original dataset
-        self._ds = nc.merge(self._ds, ds_tmp)
-
-    def __subclusters_from_file(self):
-        dataset = xr.open_dataset(self.config['histogram']
-                                  ['clustering_results_file'])
-        self.labels = dataset['labels'].values
-        self.sublabels = dataset['sublabels'].values
+        self._ds.assign(dR=lambda x:
+                        x.local_age - spatial_mean(x.local_age))
 
 
 class KMeansWorkflowBase(Workflow):
