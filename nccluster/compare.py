@@ -5,9 +5,10 @@ import xarray as xr
 import xesmf as xe
 
 from matplotlib.colors import Normalize
-from matplotlib.cm import get_cmap
+from matplotlib.cm import get_cmap, Greys
 from matplotlib_venn import venn2
 from nccluster.workflows import dRWorkflow
+from scipy.stats import gaussian_kde
 
 
 class ClusterMatcher:
@@ -118,8 +119,8 @@ class ClusterMatcher:
 
     def regrid_left_to_right(self):
         # create regridder object with the input coords of left map
-        # and output coords of right map
-        # nearest source to destination algorithm avoids interpolation
+        # and output coords of right map;
+        # "nearest source to destination" algorithm avoids interpolation
         # (since we want integer labels)
         regridder = xe.Regridder(self.labels_left,
                                  self.labels_right,
@@ -214,11 +215,100 @@ class DdR_Histogram:
         # use nearest neighbor (not interpolate!) to regrid integer labels
         labels_ds.regrid(wf2._ds, method="nn")
 
-        # extract the dR arrays
+        # initialise the attributes we'll need
         self.dR1 = wf1.ds_var_to_array('dR')
         self.dR2 = wf2.ds_var_to_array('dR')
         self.labels = labels_ds.to_xarray()['labels'].values
         self.sublabels = labels_ds.to_xarray()['sublabels'].values
 
-    def cluster_hist(self, cluster, time1, time2):
+        # first look at subclusters
+        cmap = Greys
+        cmap.set_bad('tan')
+        self.fig, (self.map_ax, self.hist_ax) = plt.subplots(1, 2)
+        self.map_ax.imshow(make_subclusters_map(self.labels, self.sublabels),
+                           origin='lower', cmap=cmap)
+        self.__cid = self.fig.canvas.mpl_connect(
+            'button_press_event', self.__process_click)
+
+        plt.show()
+
+    def __process_click(self, event):
+        if event.inaxes != self.map_ax:
+            return
+        x_pos = int(event.xdata)
+        y_pos = int(event.ydata)
+
+        label = self.labels[y_pos, x_pos]
+        sublabel = self.sublabels[y_pos, x_pos]
+
+        self.hists(label, sublabel, 0, 0)
+
+    def hists(self, cluster, subcluster, time1, time2):
         DdR = self.dR1[time1, 0] - self.dR2[time2, 0]
+
+        label_match = self.labels == cluster
+        sublabel_match = self.sublabels == subcluster
+
+        # note the extra ~ in front of the conditions
+        # because the mask should be False where we show a point (True to mask)
+        intrasub = np.ma.masked_where(~(label_match & sublabel_match), DdR)
+        extrasub = np.ma.masked_where(~(label_match & ~sublabel_match), DdR)
+        extra = np.ma.masked_where(label_match, DdR)
+
+        try:
+            for handle in self.subclust_overlay.collections:
+                handle.remove()
+        except AttributeError:
+            pass
+
+        self.subclust_overlay = self.map_ax.contourf(~np.isnan(intrasub))
+
+        # intrasubcluster average
+        DdR_k = np.nanmean(intrasub)
+
+        intrasub, extrasub, extra = list(map(
+            lambda a: np.abs(a[~np.isnan(a)].flatten() - DdR_k),
+            [intrasub, extrasub, extra]
+        ))
+
+        densities = [gaussian_kde(data)
+                     for data in [intrasub, extrasub, extra]]
+        span = range(0, 1000)
+        self.hist_ax.cla()
+        for dens in densities:
+            self.hist_ax.plot(span, dens(span), linewidth=2, alpha=0.5)
+        self.hist_ax.legend(['intrasub', 'extrasub', 'extra'])
+        plt.show()
+
+
+def make_subclusters_map(labels, sublabels):
+    subclust_map = np.full_like(labels, np.nan)
+    subclust_sizes = make_subclust_sizes(labels, sublabels)
+    for (yi, xi) in np.argwhere(~np.isnan(labels)):
+        label = labels[yi, xi]
+        sublabel = sublabels[yi, xi]
+        size = subclust_sizes[int(label)]
+        subclust_map[yi, xi] = get_sublabel_colorval(label, sublabel, size)
+    return subclust_map
+
+
+def make_subclust_sizes(labels, sublabels):
+    n_clusters = int(np.nanmax(labels)) + 1
+    subclust_sizes = []
+    for label in range(n_clusters):
+        subclust_size = np.nanmax(sublabels[labels == label])
+        subclust_sizes.append(subclust_size)
+    return subclust_sizes
+
+
+def get_sublabel_colorval(label, sublabel, subclust_size):
+    interval = 0.5
+    offset = sublabel * (interval / (subclust_size - 1))
+    colorval = label - interval/2 + offset
+    return colorval
+
+
+def show_map(map, cmap='viridis'):
+    plt.figure()
+    plt.imshow(map, origin='lower', cmap=cmap)
+    plt.show()
