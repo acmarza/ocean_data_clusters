@@ -7,6 +7,7 @@ import xesmf as xe
 from matplotlib.colors import Normalize
 from matplotlib.cm import get_cmap, Greys
 from matplotlib_venn import venn2
+from matplotlib.widgets import Slider
 from nccluster.workflows import dRWorkflow
 from scipy.stats import gaussian_kde
 
@@ -220,17 +221,61 @@ class DdR_Histogram:
         self.dR2 = wf2.ds_var_to_array('dR')
         self.labels = labels_ds.to_xarray()['labels'].values
         self.sublabels = labels_ds.to_xarray()['sublabels'].values
+        self.time1 = 0
+        self.time2 = 0
+        self.__set_DdR()
 
-        # first look at subclusters
+        # plot the subclustesr on a map
         cmap = Greys
         cmap.set_bad('tan')
-        self.fig, (self.map_ax, self.hist_ax) = plt.subplots(1, 2)
+        self.fig = plt.figure()
+        self.map_ax = self.fig.add_subplot(221)
         self.map_ax.imshow(make_subclusters_map(self.labels, self.sublabels),
                            origin='lower', cmap=cmap)
+
+        # listen for clicks on the subcluster map
         self.__cid = self.fig.canvas.mpl_connect(
             'button_press_event', self.__process_click)
 
+        # init the DdR map
+        self.dR_ax = self.fig.add_subplot(223)
+        self.dR_map = self.dR_ax.imshow(self.DdR, origin='lower')
+
+        # init the histogram plot
+        self.hist_ax = self.fig.add_subplot(224)
+
+        # sliders for adjusting timeslices
+        slider1_ax = self.fig.add_subplot(422)
+        slider2_ax = self.fig.add_subplot(424)
+
+        self.time1_slider = Slider(ax=slider1_ax,
+                                   label='Dataset 1 time slice',
+                                   valmin=0,
+                                   valmax=self.dR1.shape[0]-1,
+                                   valstep=1)
+
+        self.time2_slider = Slider(ax=slider2_ax,
+                                   label='Dataset 2 time slice',
+                                   valmin=0,
+                                   valmax=self.dR2.shape[0]-1,
+                                   valstep=1)
+
+        self.time1_slider.on_changed(self.__set_time1)
+        self.time2_slider.on_changed(self.__set_time2)
+
         plt.show()
+
+    def __set_time1(self, value=0):
+        self.time1 = value
+        self.__set_DdR()
+        self.__hists()
+        self.dR_map.set_data(self.DdR)
+
+    def __set_time2(self, value=0):
+        self.time2 = value
+        self.__set_DdR()
+        self.__hists()
+        self.dR_map.set_data(self.DdR)
 
     def __process_click(self, event):
         if event.inaxes != self.map_ax:
@@ -238,47 +283,57 @@ class DdR_Histogram:
         x_pos = int(event.xdata)
         y_pos = int(event.ydata)
 
-        label = self.labels[y_pos, x_pos]
-        sublabel = self.sublabels[y_pos, x_pos]
+        self.current_label = self.labels[y_pos, x_pos]
+        self.current_sublabel = self.sublabels[y_pos, x_pos]
 
-        self.hists(label, sublabel, 0, 0)
+        self.__hists()
 
-    def hists(self, cluster, subcluster, time1, time2):
-        DdR = self.dR1[time1, 0] - self.dR2[time2, 0]
+    def __set_DdR(self):
+        self.DdR = self.dR1[self.time1, 0] - self.dR2[self.time2, 0]
 
-        label_match = self.labels == cluster
-        sublabel_match = self.sublabels == subcluster
+    def __hists(self):
+
+        # shorthand
+        DdR = self.DdR
+
+        # boolean array that are True for points in current (sub)cluster
+        label_match = self.labels == self.current_label
+        sublabel_match = self.sublabels == self.current_sublabel
 
         # note the extra ~ in front of the conditions
         # because the mask should be False where we show a point (True to mask)
         intrasub = np.ma.masked_where(~(label_match & sublabel_match), DdR)
-        extrasub = np.ma.masked_where(~(label_match & ~sublabel_match), DdR)
+        intra = np.ma.masked_where(~label_match, DdR)
         extra = np.ma.masked_where(label_match, DdR)
 
+        # remove previous overlay
         try:
             for handle in self.subclust_overlay.collections:
                 handle.remove()
         except AttributeError:
             pass
-
+        # color in the clicked subcluster
         self.subclust_overlay = self.map_ax.contourf(~np.isnan(intrasub))
 
         # intrasubcluster average
         DdR_k = np.nanmean(intrasub)
 
-        intrasub, extrasub, extra = list(map(
-            lambda a: np.abs(a[~np.isnan(a)].flatten() - DdR_k),
-            [intrasub, extrasub, extra]
+        # remove nans, flatten and subtract subcluster average
+        intrasub, intra, extra = list(map(
+            lambda a: a[~np.isnan(a)].flatten() - DdR_k,
+            [intrasub, intra, extra]
         ))
 
+        # compute densities and plot
         densities = [gaussian_kde(data)
-                     for data in [intrasub, extrasub, extra]]
-        span = range(0, 1000)
+                     for data in [intrasub, intra, extra]]
+        span = range(-750, 750)
         self.hist_ax.cla()
         for dens in densities:
             self.hist_ax.plot(span, dens(span), linewidth=2, alpha=0.5)
-        self.hist_ax.legend(['intrasub', 'extrasub', 'extra'])
-        plt.show()
+        self.hist_ax.axvline(0)
+        self.hist_ax.legend(['intrasub', 'intra', 'extra'])
+        self.fig.canvas.draw()
 
 
 def make_subclusters_map(labels, sublabels):
