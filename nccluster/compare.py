@@ -1,11 +1,12 @@
 import matplotlib.pyplot as plt
 import nctoolkit as nc
 import numpy as np
+import os
 import xarray as xr
 import xesmf as xe
 
 from matplotlib.colors import Normalize
-from matplotlib.cm import get_cmap, Greys
+from matplotlib.cm import get_cmap, Greys, ScalarMappable
 from matplotlib_venn import venn2
 from matplotlib.widgets import Slider
 from nccluster.workflows import dRWorkflow
@@ -226,10 +227,15 @@ class DdR_Histogram:
         self.__set_DdR()
 
         # plot the subclustesr on a map
+        self.fig = plt.figure()
+        filename1 = os.path.basename(config_path1)
+        filename2 = os.path.basename(config_path2)
+        self.fig.suptitle(f"{filename1} vs. {filename2}")
+
         cmap = Greys
         cmap.set_bad('tan')
-        self.fig = plt.figure()
         self.map_ax = self.fig.add_subplot(221)
+        self.map_ax.set_title('Subcluster map')
         self.map_ax.imshow(make_subclusters_map(self.labels, self.sublabels),
                            origin='lower', cmap=cmap)
 
@@ -239,7 +245,15 @@ class DdR_Histogram:
 
         # init the DdR map
         self.dR_ax = self.fig.add_subplot(223)
+        self.dR_ax.set_title('dR1 - dR2')
         self.dR_map = self.dR_ax.imshow(self.DdR, origin='lower')
+
+        vmin = np.nanmin(self.dR1) - np.nanmax(self.dR2)
+        vmax = np.nanmax(self.dR1) - np.nanmin(self.dR2)
+        norm = Normalize(vmin=vmin, vmax=vmax)
+        cax = self.dR_ax.inset_axes([1.04, 0, 0.05, 1])
+        self.fig.colorbar(ScalarMappable(norm=norm, cmap='viridis'),
+                          ax=self.dR_ax, cax=cax)
 
         # init the histogram plot
         self.hist_ax = self.fig.add_subplot(224)
