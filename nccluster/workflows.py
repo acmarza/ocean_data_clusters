@@ -24,6 +24,8 @@ from tslearn.utils import to_time_series_dataset, to_sktime_dataset
 
 from nccluster.multisliceviewer import MultiSliceViewer
 from nccluster.corrviewer import CorrelationViewer
+from nccluster.utils import make_subclusters_map, make_subclust_sizes,\
+    get_sublabel_colorval
 
 nc.options(lazy=False)
 
@@ -726,55 +728,10 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
 
         return ordered_labels
 
-    def __make_subclust_sizes(self):
-        # init empty list
-        subclust_sizes = []
-
-        # retrieve the number of shape-based clusters
-        n_clusters = int(np.nanmax(self.labels2step[:, :, 0])) + 1
-
-        # 0 to n-1
-        for cluster in range(0, n_clusters):
-            # get the indices of grid points in this cluster
-            sublabels = np.extract(self.labels2step[:, :, 0] == cluster,
-                                   self.labels2step[:, :, 1])
-
-            # the number of subclusters is the maximum sublabel + 1
-            subclust_sizes.append(int(np.nanmax(sublabels)) + 1)
-
-        return subclust_sizes
-
-    def __make_subclusters_map(self):
-
-        # initialise an empty 2D array with the required size
-        _, _, y, x = self._age_array.shape
-        subclusters_map = np.full((y, x), np.nan)
-
-        # for every grid point in the surface slice that is not nan
-        for arg in np.argwhere(~np.isnan(self._age_array[0, 0])):
-            # unpack the index
-            yi, xi = arg
-            # unpack the labels for cluster and subcluster
-            label, sublabel = self.labels2step[yi, xi]
-            colorval = self.__label_sublabel_to_colorval(label, sublabel)
-            subclusters_map[yi, xi] = colorval
-
-        return subclusters_map
-
-    def __label_sublabel_to_colorval(self, label, sublabel):
-        # recover the size of each subcluster
-        subclust_sizes = self.__make_subclust_sizes()
-        # will turn subcluster labels into floats spanning an interval
-        # around the integer label of the shape-based cluster;
-        # this makes for nice intracluster shading
-        interval = 0.5
-        offset = sublabel * (interval / (subclust_sizes[int(label)]-1))
-        colorval = label - interval/2 + offset
-        return colorval
-
     def _map_clusters(self):
         # override parent method
-        subclusters_map = self.__make_subclusters_map()
+        subclusters_map = make_subclusters_map(self.labels2step[:, :, 0],
+                                               self.labels2step[:, :, 1])
         ax = self.fig.add_subplot(122)
         ax.imshow(subclusters_map, origin='lower', cmap='twilight')
 
@@ -784,7 +741,8 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         labels = self.labels2step[:, :, 0]
         labels = labels[~np.isnan(labels)].flatten()
 
-        subclust_sizes = self.__make_subclust_sizes()
+        subclust_sizes = make_subclust_sizes(self.labels2step[:, :, 0],
+                                             self.labels2step[:, :, 1])
         n_clusters = len(subclust_sizes)
 
         interval = 0.5
@@ -798,8 +756,10 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
             ax = self.fig.add_subplot(n_clusters, 2, 2 * label + 1)
 
             barycenters = []
-            for sublabel in range(subclust_sizes[label]):
-                colorval = self.__label_sublabel_to_colorval(label, sublabel)
+            subclust_size = subclust_sizes[label]
+            for sublabel in range(subclust_size):
+                colorval = get_sublabel_colorval(label, sublabel,
+                                                 subclust_size)
                 color = cmap(norm(colorval))
 
                 label_match = labels == label
@@ -811,7 +771,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
                 barycenters.append(barycenter)
             # need to plot these last else they'd be covered by subcluster ts
             for barycenter in barycenters:
-                ax.plot(barycenter.ravel(), "r-", linewidth=0.5)
+                ax.plot(barycenter.ravel(), color='magenta', linewidth=0.5)
 
     def save_clustering_results(self, filename):
         labels_darray = self._make_labels_data_array(step=0)
