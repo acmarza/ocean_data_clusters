@@ -320,14 +320,14 @@ class DdR_Histogram:
 
         # remove nans, flatten and subtract subcluster average
         intrasub, intra, extra = list(map(
-            lambda a: a[~np.isnan(a)].flatten() - DdR_k,
+            lambda a: np.abs(a[~np.isnan(a)].flatten() - DdR_k),
             [intrasub, intra, extra]
         ))
 
         # compute densities and plot
         densities = [gaussian_kde(data)
                      for data in [intrasub, intra, extra]]
-        span = range(-750, 750)
+        span = range(0, 750)
         self.hist_ax.cla()
         for dens in densities:
             self.hist_ax.plot(span, dens(span), linewidth=2, alpha=0.5)
