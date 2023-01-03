@@ -13,6 +13,136 @@ from nccluster.multisliceviewer import MultiSliceViewer
 from tqdm import tqdm
 
 
+class CorrelationMapper:
+
+    def __init__(self, corr_mat, map_shape, fig=None):
+
+        # initialise class attributes for future reference
+        self.corr_mat = corr_mat
+        self.n_rows, self.n_cols = map_shape
+
+        # create a new figure or use an existing one if supplied
+        self.fig = fig if fig else plt.figure()
+
+        # default the location to analyse to the middle of the map
+        self.corr_loc = [int(self.n_rows/2), int(self.n_cols/2)]
+
+        # the main Axes of this interactive viewer
+        self.init_corr_ax()
+
+        self.update_plots()
+
+    def show(self):
+        self.fig.show()
+
+    def init_corr_ax(self):
+
+        # initialise the plot that shows correlation map for clicked point
+        self.corr_ax = self.fig.add_subplot()
+
+        # trick to ensure colorbar spands the range of valuese present in the
+        # correlation matrix
+        norm = Normalize(vmin=np.nanmin(self.corr_mat),
+                         vmax=np.nanmax(self.corr_mat)
+                         )
+
+        # put the colorbar inside inset axes by the correlation map
+        cax = self.corr_ax.inset_axes([1.04, 0, 0.05, 1])
+        self.fig.colorbar(ScalarMappable(norm=norm),
+                          ax=self.corr_ax,
+                          cax=cax,
+                          ticks=np.linspace(-1, 1, num=5, endpoint=True)
+                          )
+
+        # initialise the correlation map with zeroes in the expected map shape
+        # values don't matter because we'll call update_corr_map()
+        self.corr_ax_image = self.corr_ax.imshow(
+            np.zeros([self.n_rows, self.n_cols]),
+            origin='lower',
+            norm=norm
+        )
+
+        # listen for click events only when mouse over corr_ax
+        self.enter_corr_ax_cid = self.fig.canvas.mpl_connect(
+            'axes_enter_event', self.enter_corr_ax_event)
+        self.exit_corr_ax_cid = self.fig.canvas.mpl_connect(
+            'axes_leave_event', self.leave_corr_ax_event)
+
+    def update_corr_loc_marker(self):
+        # clear previous marker if present
+        try:
+            for handle in self.helper_point:
+                handle.remove()
+        except AttributeError:
+            pass
+
+        # add new star-shaped marker in clicked location
+        try:
+            x_pos, y_pos = self.corr_loc
+            self.helper_point = self.corr_ax.plot(
+                x_pos,
+                y_pos,
+                color='black',
+                marker='*'
+            )
+        except AttributeError:
+            pass
+
+    def process_corr_ax_click(self, event):
+        # ignore clicks outside the plots
+        if not event.inaxes:
+            return
+
+        # get position of click
+        x_pos = int(event.xdata)
+        y_pos = int(event.ydata)
+
+        # save last clicked point
+        self.corr_loc = [x_pos, y_pos]
+
+        # update plots based on new location to be analysed
+        self.update_plots()
+
+        # refresh figure
+        self.fig.canvas.draw()
+
+    def update_plots(self):
+        self.update_corr_map()
+        self.update_corr_loc_marker()
+
+    def update_corr_map(self):
+
+        # unpack coords of last clicked point
+        (x_pos, y_pos) = self.corr_loc
+
+        # translate x-y coords of click to index of grid point in flat array
+        flat_index = y_pos * self.n_rows + x_pos
+
+        # get the corresponding row in the correlation map
+        corr_array = self.corr_mat[flat_index]
+
+        # shape this row into a 2D array and plot
+        corr_map = np.reshape(corr_array,
+                              [self.n_rows, self.n_cols]
+                              )
+        self.corr_ax_image.set_data(corr_map)
+
+    def enter_corr_ax_event(self, event):
+        # check whether the entered ax is the correlation map
+        if event.inaxes == self.corr_ax:
+            # if so, listen for clicks
+            self.click_corr_ax_cid = self.fig.canvas.mpl_connect(
+                'button_press_event', self.process_corr_ax_click)
+
+    def leave_corr_ax_event(self, event):
+        # check whether the exited ax is the correlation map
+        if event.inaxes == self.corr_ax:
+            # if so, stop listening for clicks
+            self.fig.canvas.mpl_disconnect(
+                self.click_corr_ax_cid
+            )
+
+
 class CorrelationMatrixViewer:
 
     def __init__(self, corr_mat, n_rows, n_cols, fig=None, cmap='rainbow'):
@@ -472,3 +602,15 @@ class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
         # plot the new time series
         self.evo_ax.plot(range(self.surface_slices.shape[0]),
                          self.current_evo)
+
+
+class DendrogramViewer:
+
+    def __init__(self, age_array):
+        t, _, y, x = age_array.shape
+        evolutions = np.reshape(age_array[:, 0], [t, x*y]).T
+        corr_mat = np.corrcoef(evolutions)
+        CorrelationMapper(corr_mat, (y, x)).show()
+        # self.fig = plt.figure()
+        # self.map_ax = self.fig.add_subplot(121)
+        # self.dendro_ax = self.fig.add_subplot(122)

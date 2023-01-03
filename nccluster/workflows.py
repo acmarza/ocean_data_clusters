@@ -329,6 +329,9 @@ class RadioCarbonWorkflow(Workflow):
                         (x.di14c/x.dic-1)*1000)
         print("[i] Computed dc14 from di14c and dic")
 
+    def _setters(self):
+        self._age_array = self.ds_var_to_array('local_age')
+
 
 class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
     '''Base class for workflows involving time series.'''
@@ -337,8 +340,8 @@ class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
         self.__check_plot_all_ts_bool()
 
     def _setters(self):
+        super._setters()
         self.mask = None
-        self._age_array = self.ds_var_to_array('local_age')
 
     def run(self):
         # this base class simply plots all the time series if asked to
