@@ -340,7 +340,7 @@ class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
         self.__check_plot_all_ts_bool()
 
     def _setters(self):
-        super._setters()
+        super()._setters()
         self.mask = None
 
     def run(self):
