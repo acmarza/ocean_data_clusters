@@ -13,7 +13,7 @@ from nccluster.multisliceviewer import MultiSliceViewer
 from tqdm import tqdm
 
 
-class CorrelationMapper:
+class CorrelationMapperBase:
 
     def __init__(self, corr_mat, map_shape, fig=None):
 
@@ -24,6 +24,13 @@ class CorrelationMapper:
         # create a new figure or use an existing one if supplied
         self.fig = fig if fig else plt.figure()
 
+
+class CorrelationMapper(CorrelationMapperBase):
+
+    def __init__(self, corr_mat, map_shape, fig=None):
+
+        super().__init__(corr_mat, map_shape, fig=fig)
+
         # default the location to analyse to the middle of the map
         self.corr_loc = [int(self.n_rows/2), int(self.n_cols/2)]
 
@@ -31,9 +38,6 @@ class CorrelationMapper:
         self.init_corr_ax()
 
         self.update_plots()
-
-    def show(self):
-        self.fig.show()
 
     def init_corr_ax(self):
 
@@ -48,7 +52,7 @@ class CorrelationMapper:
 
         # put the colorbar inside inset axes by the correlation map
         cax = self.corr_ax.inset_axes([1.04, 0, 0.05, 1])
-        self.fig.colorbar(ScalarMappable(norm=norm),
+        self.fig.colorbar(ScalarMappable(norm=norm, cmap='coolwarm'),
                           ax=self.corr_ax,
                           cax=cax,
                           ticks=np.linspace(-1, 1, num=5, endpoint=True)
@@ -59,7 +63,8 @@ class CorrelationMapper:
         self.corr_ax_image = self.corr_ax.imshow(
             np.zeros([self.n_rows, self.n_cols]),
             origin='lower',
-            norm=norm
+            norm=norm,
+            cmap='coolwarm'
         )
 
         # listen for click events only when mouse over corr_ax
@@ -141,6 +146,181 @@ class CorrelationMapper:
             self.fig.canvas.mpl_disconnect(
                 self.click_corr_ax_cid
             )
+
+
+class FclusterViewer(CorrelationMapperBase):
+
+    def __init__(self, corr_mat, map_shape, fig=None, cmap='rainbow'):
+
+        super().__init__(corr_mat, map_shape, fig=fig)
+        self.cmap = cmap
+
+        # initialise widgets to tweak clustering
+        self.init_linkage_method_radio_ax()
+        self.init_fcluster_criterion_radio_ax()
+        self.init_fcluster_thresh_textbox_ax()
+
+        # set some class attributes from the values of widgets
+        # like multiple selection and text input
+        self.linkage_method = self.linkage_method_radio.value_selected
+        self.fcluster_criterion = self.fcluster_criterion_radio.value_selected
+        self.fcluster_thresh = float(self.fcluster_thresh_textbox.text)
+
+        # with the above can now perform correlation clustering
+        # and initialise the correlation map
+        self.init_cluster_ax()
+
+        # call a first update to prepare the plots for viewing
+        self.update_cluster_map()
+
+    def init_linkage_method_radio_ax(self):
+        # radio buttons for changing clustering method
+        # create a new ax and set its title
+        self.linkage_method_radio_ax = self.fig.add_subplot(326)
+        self.linkage_method_radio_ax.set_title('Linkage method')
+
+        # create the radio button with predefined labels
+        self.linkage_method_radio = RadioButtons(
+            self.linkage_method_radio_ax,
+            ('single', 'complete', 'average', 'weighted', 'centroid',
+             'median', 'ward'),
+            active=1
+        )
+
+        # set the radio button to call this function when clicked
+        self.linkage_method_radio.on_clicked(
+            self.linkage_method_radio_on_click
+        )
+
+    def init_fcluster_criterion_radio_ax(self):
+        # see init_linkage_method_radio_ax comments
+        self.fcluster_criterion_radio_ax = self.fig.add_subplot(324)
+        self.fcluster_criterion_radio_ax.set_title('Fcluster criterion')
+
+        self.fcluster_criterion_radio = RadioButtons(
+            self.fcluster_criterion_radio_ax,
+            ('inconsistent', 'distance', 'maxclust', 'monocrit',
+             'maxclust_monocrit'),
+            active=1
+        )
+
+        self.fcluster_criterion_radio.on_clicked(
+            self.fcluster_criterion_radio_on_click
+        )
+
+    def init_fcluster_thresh_textbox_ax(self):
+        # create an ax and give it a title
+        self.fcluster_thresh_textbox_ax = self.fig.add_subplot(322)
+        self.fcluster_thresh_textbox_ax.set_title("Fcluster threshold")
+
+        # create the textbox giving it an initial value
+        self.fcluster_thresh_textbox = TextBox(
+            ax=self.fcluster_thresh_textbox_ax,
+            label='value:',
+            initial='0.4'
+        )
+
+        # tell the textbox to call this function when new text is submitted
+        self.fcluster_thresh_textbox.on_submit(
+            self.fcluster_thresh_textbox_on_submit
+        )
+
+    def init_cluster_ax(self):
+        # create new ax for the cluster map
+        self.cluster_ax = self.fig.add_subplot(121)
+
+        # run correlation clustering to get the 2D array of labels
+        labels_shaped = self.corr_cluster()
+
+        # map out clusters
+        self.cluster_ax_image = self.cluster_ax.imshow(
+            labels_shaped,
+            origin='lower',
+            cmap=self.cmap
+        )
+
+    def corr_cluster(self):
+        # convert correlation matrix to pandas dataframe to drop nan rows/cols
+        df = pd.DataFrame(self.corr_mat, index=None, columns=None)
+        droppedna = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
+
+        # form dataframe back into a correlation matrix (without nans)
+        corr = np.array(droppedna)
+        corr = np.reshape(corr, droppedna.shape)
+
+        # corrections to reduce floating point errors
+        corr = (corr + corr.T) / 2
+        # np.fill_diagonal(corr, 1)
+
+        # convert the correlation coefficients (higher is closer)
+        # into distances (lower is closer)
+        dissimilarity = 1 - corr
+
+        # corrections to reduce floating point errors
+        dissimilarity = (dissimilarity + dissimilarity.T) / 2
+        np.fill_diagonal(dissimilarity, 0)
+
+        # dissimilarity matrix needs to be in this form for hierarchical
+        # clustering
+        square = squareform(dissimilarity)
+
+        # perform hierarchical clustering
+        hierarchy = linkage(square, method=self.linkage_method)
+
+        # flatten the hierarchy into usable clusters
+        labels = fcluster(hierarchy,
+                          self.fcluster_thresh,
+                          criterion=self.fcluster_criterion
+                          )
+
+        # put the labels into the original dataframe that includes nans
+        df.loc[
+                df.index.isin(droppedna.index),
+                'labels'
+                ] = labels
+
+        # get the labels back as a flat array, now including nans
+        labels_flat = np.ma.masked_array(df['labels'])
+
+        # shape the label back into a 2D array for plotting clusters on a map
+        labels_shaped = np.reshape(labels_flat, (self.n_rows, self.n_cols))
+
+        return labels_shaped
+
+    def update_cluster_map(self):
+        # re-run correlation clustering and get the labels 2D array
+        labels_shaped = self.corr_cluster()
+
+        # compute and set a new norm based on the new labels
+        # this ensures the colors are re-assigned to accommodate more clusters
+        labels_min = np.nanmin(labels_shaped)
+        labels_max = np.nanmax(labels_shaped)
+        norm = Normalize(vmin=labels_min, vmax=labels_max)
+        self.cluster_ax_image.set(norm=norm, cmap=self.cmap)
+
+        # set the labels as the cluster plot image
+        self.cluster_ax_image.set_data(labels_shaped)
+
+        # refresh canvas
+        self.fig.canvas.draw()
+
+    def linkage_method_radio_on_click(self, label):
+        # update class attribute based on newly selected label in radio
+        self.linkage_method = label
+        # map will update itself using the new linkage method
+        self.update_cluster_map()
+
+    def fcluster_criterion_radio_on_click(self, label):
+        # update class attribute based on newly selected label in radio
+        self.fcluster_criterion = label
+        # map will update itself using the new fcluster criterion
+        self.update_cluster_map()
+
+    def fcluster_thresh_textbox_on_submit(self, value):
+        # update class attribute based on newly input text
+        self.fcluster_thresh = value
+        # map will update itself using the new fcluster threshold
+        self.update_cluster_map()
 
 
 class CorrelationMatrixViewer:
@@ -463,7 +643,7 @@ class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
 
         # call init of CorrelationMatrixViewer parent,
         # passing it the child's fig
-        CorrelationMatrixViewer.__init__(self, corr_mat, x, y, fig=self.fig)
+        CorrelationMatrixViewer.__init__(self, corr_mat, y, x, fig=self.fig)
 
         # arrange the plot to fit on screen
         self.layout_plots()
@@ -610,7 +790,8 @@ class DendrogramViewer:
         t, _, y, x = age_array.shape
         evolutions = np.reshape(age_array[:, 0], [t, x*y]).T
         corr_mat = np.corrcoef(evolutions)
-        CorrelationMapper(corr_mat, (y, x)).show()
+        my_map = FclusterViewer(corr_mat, (y, x))
+        plt.show()
         # self.fig = plt.figure()
         # self.map_ax = self.fig.add_subplot(121)
         # self.dendro_ax = self.fig.add_subplot(122)
