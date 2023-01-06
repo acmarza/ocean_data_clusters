@@ -2,11 +2,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from matplotlib.cm import ScalarMappable
-from matplotlib.colors import Normalize
+from matplotlib.cm import ScalarMappable, get_cmap
+from matplotlib.colors import Normalize, rgb2hex
 from matplotlib.gridspec import GridSpec
 from matplotlib.widgets import RadioButtons, TextBox
-from scipy.cluster.hierarchy import linkage, fcluster, dendrogram
+from scipy.cluster.hierarchy import linkage, fcluster, dendrogram,\
+    set_link_color_palette
 from scipy.spatial.distance import squareform
 from scipy.stats.stats import pearsonr
 from nccluster.multisliceviewer import MultiSliceViewer
@@ -242,13 +243,36 @@ class FclusterViewer(CorrelationMapperBase):
             cmap=self.cmap
         )
 
+    def make_df(self):
+        return pd.DataFrame(self.corr_mat, index=None, columns=None)
+
+    def make_droppedna_df(self):
+        df = self.make_df()
+        return df.dropna(axis=0, how='all').dropna(axis=1, how='all')
+
+    def flat_notna_array_to_map(self, arr, col_name):
+        df = self.make_df()
+        droppedna = self.make_droppedna_df()
+
+        # put the labels into the original dataframe that includes nans
+        df.loc[
+                df.index.isin(droppedna.index),
+                col_name,
+                ] = arr
+
+        # get the labels back as a flat array, now including nans
+        labels_flat = np.ma.masked_array(df[col_name])
+
+        # shape the label back into a 2D array for plotting clusters on a map
+        labels_shaped = np.reshape(labels_flat, (self.n_rows, self.n_cols))
+
+        return labels_shaped
+
     def corr_cluster(self):
 
-        df = pd.DataFrame(self.corr_mat, index=None, columns=None)
-        droppedna = df.dropna(axis=0, how='all').dropna(axis=1, how='all')
+        droppedna = self.make_droppedna_df()
+
         # form dataframe back into a correlation matrix (without nans)
-        # corr = np.array(droppedna)
-        # corr = np.reshape(corr, droppedna.shape)
         corr = droppedna.to_numpy()
 
         # corrections to reduce floating point errors
@@ -275,18 +299,7 @@ class FclusterViewer(CorrelationMapperBase):
                           self.fcluster_thresh,
                           criterion=self.fcluster_criterion
                           )
-
-        # put the labels into the original dataframe that includes nans
-        df.loc[
-                df.index.isin(droppedna.index),
-                'labels'
-                ] = labels
-
-        # get the labels back as a flat array, now including nans
-        labels_flat = np.ma.masked_array(df['labels'])
-
-        # shape the label back into a 2D array for plotting clusters on a map
-        labels_shaped = np.reshape(labels_flat, (self.n_rows, self.n_cols))
+        labels_shaped = self.flat_notna_array_to_map(labels, 'labels')
 
         return (hierarchy, labels_shaped)
 
@@ -324,7 +337,7 @@ class FclusterViewer(CorrelationMapperBase):
 
     def fcluster_thresh_textbox_on_submit(self, value):
         # update class attribute based on newly input text
-        self.fcluster_thresh = value
+        self.fcluster_thresh = float(value)
         # map will update itself using the new fcluster threshold
         self.update_plots()
 
@@ -818,15 +831,25 @@ class DendrogramViewer(FclusterViewer):
     def update_plots(self):
         hierarchy, labels_shaped = self.corr_cluster()
 
+        cmap = get_cmap(self.cmap)
+        labels_min = np.nanmin(labels_shaped)
+        print(labels_min)
+        labels_max = np.nanmax(labels_shaped)
+        print(labels_max)
+        norm = Normalize(vmin=labels_min, vmax=labels_max)
+        colors = cmap(norm(np.arange(labels_max)+1))
+        colors = [rgb2hex(c) for c in colors]
+        print(colors)
+        set_link_color_palette(colors)
+
         self.update_dendrogram(hierarchy)
         self.update_cluster_map(labels_shaped)
-
         self.fig.canvas.draw()
 
     def update_dendrogram(self, hierarchy):
         self.dendro_ax.cla()
-        dendrogram(hierarchy,
-                   no_labels=True,
-                   color_threshold=self.fcluster_thresh,
-                   ax=self.dendro_ax)
+        self.dendro = dendrogram(hierarchy,
+                                 color_threshold=self.fcluster_thresh,
+                                 no_labels=True,
+                                 ax=self.dendro_ax)
         self.dendro_ax.axhline(y=self.fcluster_thresh)
