@@ -7,7 +7,7 @@ from matplotlib.colors import Normalize
 
 class MultiSliceViewer:
 
-    def __init__(self, volume, title="Viewer", colorbar=True, legend=False,
+    def __init__(self, volume, title=None, colorbar=True, legend=False,
                  cmap='rainbow', fig=None):
         # if data has only 3 dimensions; assume it is missing the depth axis
         # reshape into 4D array with single depth level
@@ -41,7 +41,8 @@ class MultiSliceViewer:
         self.keypress_cid = self.fig.canvas.mpl_connect('key_press_event',
                                                         self.process_key)
         # put a title at the top of the whole figure
-        self.fig.suptitle(title)
+        if title is not None:
+            self.fig.suptitle(title)
 
     def init_main_ax(self, colorbar, legend):
         # create the main plot Axes

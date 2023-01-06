@@ -23,7 +23,7 @@ from tslearn.preprocessing import TimeSeriesScalerMeanVariance
 from tslearn.utils import to_time_series_dataset, to_sktime_dataset
 
 from nccluster.multisliceviewer import MultiSliceViewer
-from nccluster.corrviewer import CorrelationViewer
+from nccluster.corrviewer import CorrelationViewer, DendrogramViewer
 from nccluster.utils import make_subclusters_map, make_subclust_sizes,\
     get_sublabel_colorval
 
@@ -822,6 +822,15 @@ class dRWorkflow(RadioCarbonWorkflow):
         # compute R-age difference from surface mean
         self._ds.assign(dR=lambda x:
                         x.local_age - spatial_mean(x.local_age))
+
+
+class DendrogramWorkflow(RadioCarbonWorkflow):
+
+    def run(self):
+        t, _, y, x = self._age_array.shape
+        evolutions = np.reshape(self._age_array[:, 0], [t, x*y]).T
+        corr_mat = np.corrcoef(evolutions)
+        DendrogramViewer(corr_mat, (y, x))
 
 
 class KMeansWorkflowBase(Workflow):
