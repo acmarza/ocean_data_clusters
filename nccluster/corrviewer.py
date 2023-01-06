@@ -648,7 +648,7 @@ class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
         self.evo_ax = self.fig.add_subplot()
 
         # call init of MultiSliceViewer parent, passing it the child's fig
-        MultiSliceViewer.__init__(self, volume, title=title, colorbar=colorbar,
+        MultiSliceViewer.__init__(self, volume, colorbar=colorbar,
                                   legend=False, cmap=cmap, fig=self.fig)
 
         # obtain the correlation matrix
