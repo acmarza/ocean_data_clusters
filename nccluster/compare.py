@@ -58,7 +58,9 @@ class ClusterMatcher:
             print("[!] Can't overlap maps with different sizes! Try regrid.")
 
         # initialise the figure and axes and define hatches pattern
-        fig = plt.figure()
+
+        plt.rcParams['figure.constrained_layout.use'] = True
+        plt.figure()
         self.ax1 = plt.subplot(221)
         self.ax2 = plt.subplot(222)
 
@@ -74,26 +76,15 @@ class ClusterMatcher:
                         origin='lower', cmap=self.cmap)
         self.ax2.contourf(overlap_mask, 1, hatches=hatches, alpha=0)
 
-        # listen for clicks
-        self.cid = fig.canvas.mpl_connect('button_press_event',
-                                          self.__venn_clicked_label)
+        n_clusters = self.__get_n_clusters()
+        for clust in range(n_clusters):
+            ax = plt.subplot(2, n_clusters, n_clusters + clust + 1)
+            self.plot_venn(clust, ax)
 
         # show figure
         plt.show()
 
-    def __venn_clicked_label(self, event):
-        # get click location
-        x_pos = int(event.xdata)
-        y_pos = int(event.ydata)
-
-        # set data to left or right map depending on where the mouse was
-        if event.inaxes == self.ax1:
-            data = self.labels_left.values
-        if event.inaxes == self.ax2:
-            data = self.labels_right.values
-
-        # set the label from its index in the map data array
-        label = data[y_pos, x_pos]
+    def plot_venn(self, label, ax):
 
         # get the color corresponding to the label
         label_color = self.cmap(self.norm(label))
@@ -104,21 +95,14 @@ class ClusterMatcher:
         (idx,) = np.where(self.labels_right.values.flatten() == label)
         right_set = set(idx)
 
-        # get a reference to the venn diagram ax and clear previous drawing
-        ax3 = plt.subplot(212)
-        ax3.clear()
-
-        # create new venn diagram based on the sets corresponding to the label
+        # create venn diagram based on the sets corresponding to the label
         venn = venn2(subsets=[left_set, right_set],
                      set_colors=[label_color, label_color],
-                     ax=ax3)
+                     ax=ax)
 
         # use black edges on the venn diagram
         for patch in venn.patches:
             patch.set(edgecolor='black')
-
-        # update the figure
-        event.canvas.draw()
 
     def regrid_left_to_right(self):
         # create regridder object with the input coords of left map
@@ -136,13 +120,17 @@ class ClusterMatcher:
         # put the attributes back in
         self.labels_left.attrs = attrs
 
+    def __get_n_clusters(self, left=True):
+        labels = self.labels_left if left else self.labels_right
+        return int(np.nanmax(labels.values)) + 1
+
     def match_labels(self):
         # flatten labels into 1D array
         labels_left_flat = self.labels_left.values.flatten()
         labels_right_flat = self.labels_right.values.flatten()
 
         # the labels are 0 to n-1
-        n_clusters = int(np.nanmax(self.labels_left.values)) + 1
+        n_clusters = self.__get_n_clusters()
         if n_clusters != int(np.nanmax(self.labels_right.values)) + 1:
             print("[!] The maps have a different number of clusters")
             exit()
