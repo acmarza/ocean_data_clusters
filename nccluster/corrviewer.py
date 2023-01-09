@@ -833,13 +833,10 @@ class DendrogramViewer(FclusterViewer):
 
         cmap = get_cmap(self.cmap)
         labels_min = np.nanmin(labels_shaped)
-        print(labels_min)
         labels_max = np.nanmax(labels_shaped)
-        print(labels_max)
         norm = Normalize(vmin=labels_min, vmax=labels_max)
         colors = cmap(norm(np.arange(labels_max)+1))
         colors = [rgb2hex(c) for c in colors]
-        print(colors)
         set_link_color_palette(colors)
 
         self.update_dendrogram(hierarchy)

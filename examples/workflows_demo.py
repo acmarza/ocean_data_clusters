@@ -7,6 +7,7 @@ from nccluster.workflows import KMeansWorkflow
 from nccluster.workflows import CorrelationWorkflow
 from nccluster.workflows import TimeSeriesClusteringWorkflow
 from nccluster.workflows import TwoStepTimeSeriesClusterer
+from nccluster.workflows import DendrogramWorkflow
 
 
 def main():
@@ -19,7 +20,8 @@ def main():
                         help=" which method to use to analyse\
                         the data: km = k-means; ts = timeseries clustering;\
                         corr = correlation viewer + hierarchical clustering;\
-                        two = two-step (clusters + subclusters) time series"
+                        two = two-step (clusters + subclusters) time series;\
+                        dendro = dendrogram viewer and hierarchical clustering"
                         )
     args = parser.parse_args()
 
@@ -32,6 +34,8 @@ def main():
         wf = CorrelationWorkflow(args.config)
     elif args.method == 'two':
         wf = TwoStepTimeSeriesClusterer(args.config)
+    elif args.method == 'dendro':
+        wf = DendrogramWorkflow(args.config)
     else:
         print("[!] Unrecognised method passed via commandline; see help (-h)")
 
