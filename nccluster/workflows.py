@@ -18,7 +18,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sktime.clustering.k_medoids import TimeSeriesKMedoids
 from tqdm import tqdm
 from tslearn.barycenters import euclidean_barycenter
-from tslearn.clustering import TimeSeriesKMeans
+from tslearn.clustering import TimeSeriesKMeans, silhouette_score
 from tslearn.preprocessing import TimeSeriesScalerMeanVariance
 from tslearn.utils import to_time_series_dataset, to_sktime_dataset
 
@@ -460,6 +460,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         self.__check_clustering_method()
         self.__check_scaling_bool()
         self.__check_labels_long_name()
+        self.__check_cmap()
 
     def _setters(self):
         super()._setters()
@@ -514,23 +515,27 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
             confirm_msg='[i] Labels variable long name: '
         )
 
-    def _fit_model(self):
+    def __check_cmap(self):
+        self._check_config_option(
+            'default', 'palette',
+            required=True,
+            default='rainbow',
+            confirm_msg='[i] Palette for plots: '
+        )
+
+    def _fit_model(self, n_clusters=None, dataset=None):
+        if n_clusters is None:
+            n_clusters = self.config['timeseries'].getint('n_clusters')
+
         # define the keyword arguments to pass to the model
         kwargs = {
-            'n_clusters': self.config['timeseries'].getint('n_clusters'),
+            'n_clusters': n_clusters,
             # 'max_iter': 10,
             'metric': 'euclidean'
-
         }
 
-        dataset = self.ts
-
-        # optionally scale the data (aids in shape detection
-        # but loses amplitude information)
-        if self.config['timeseries'].getboolean('scaling'):
-            print("[i] Normalising time series")
-            dataset = TimeSeriesScalerMeanVariance().fit_transform(dataset)
-
+        if dataset is None:
+            dataset = self.__make_dataset()
         # initialise model using desired clustering method
         if self.config['timeseries']['method'] == 'k-means':
             print("[i] Initialising k-means model")
@@ -539,11 +544,21 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
             print("[i] Initialising k-medoids model")
             self.model = TimeSeriesKMedoids(**kwargs)
             dataset = to_sktime_dataset(dataset)
-
         print("[i] Fitting model, please stand by")
 
         # actually fit the model
         self.model.fit(dataset)
+
+    def __make_dataset(self):
+        dataset = self.ts
+
+        # optionally scale the data (aids in shape detection
+        # but loses amplitude information)
+        if self.config['timeseries'].getboolean('scaling'):
+            print("[i] Normalising time series")
+            dataset = TimeSeriesScalerMeanVariance().fit_transform(dataset)
+
+        return dataset
 
     def view_results(self):
         self.fig = plt.figure()
@@ -558,7 +573,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         labels = self.model.labels_
         n_clusters = self.model.n_clusters
         norm = Normalize(vmin=0, vmax=n_clusters-1)
-        cmap = get_cmap('viridis')
+        cmap = get_cmap(self.config['default']['palette'])
         # for each cluster/label
         for label in range(0, n_clusters):
             # create a subplot in a table with n_cluster rows and 1 column
@@ -579,7 +594,8 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
 
         # view the clusters on a map
         ax = self.fig.add_subplot(122)
-        ax.imshow(labels_shaped, origin='lower')
+        ax.imshow(labels_shaped, origin='lower',
+                  cmap=self.config['default']['palette'])
 
     def _make_labels_shaped(self):
         # get the timeseries as a dataframe and append labels to non-empty rows
@@ -629,6 +645,33 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         darray = self._make_labels_data_array()
         darray.to_netcdf(filename)
         print(f"[i] Saved labels to {filename}")
+
+    def clustering_metrics(self, n_min=2, n_max=10):
+        inertias = []
+        sil_scores = []
+        ch_scores = []
+        db_scores = []
+        dataset = self.__make_dataset()
+        n_range = range(n_min, n_max+1)
+        for n in tqdm(n_range, desc='[i] Running metrics for n_clusters = '):
+            self._fit_model(n_clusters=n, dataset=dataset)
+            labels = self.model.labels_
+            inertias.append(self.model.inertia_)
+            sil_scores.append(
+                silhouette_score(dataset, labels, metric='euclidean'))
+            ch_scores.append(calinski_harabasz_score(dataset[:, :, 0], labels))
+            db_scores.append(davies_bouldin_score(dataset[:, :, 0], labels))
+
+        fig, axes = plt.subplots(4, 1)
+        scores = [inertias, sil_scores, ch_scores, db_scores]
+        titles = ['Sum of squared errors, choose elbow point',
+                  'Silhouette Score, higher is better',
+                  'Calinski-Harabasz Index, higher is better',
+                  'Davies-Bouldin Index, lower is better']
+        for (ax, score, title) in zip(axes, scores, titles):
+            ax.plot(n_range, score)
+            ax.set_title(title)
+        plt.show()
 
 
 class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
