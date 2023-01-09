@@ -18,7 +18,7 @@ def make_subclust_sizes(labels, sublabels):
     subclust_sizes = []
     for label in range(n_clusters):
         subclust_size = np.nanmax(sublabels[labels == label])
-        subclust_sizes.append(int(subclust_size))
+        subclust_sizes.append(int(subclust_size)+1)
     return subclust_sizes
 
 

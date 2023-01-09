@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from kneed import KneeLocator
 from math import log
 from matplotlib.colors import Normalize
 from matplotlib.cm import get_cmap
@@ -523,7 +524,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
             confirm_msg='[i] Palette for plots: '
         )
 
-    def _fit_model(self, n_clusters=None, dataset=None):
+    def _fit_model(self, n_clusters=None, dataset=None, quiet=False):
         if n_clusters is None:
             n_clusters = self.config['timeseries'].getint('n_clusters')
 
@@ -538,13 +539,16 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
             dataset = self.__make_dataset()
         # initialise model using desired clustering method
         if self.config['timeseries']['method'] == 'k-means':
-            print("[i] Initialising k-means model")
+            if not quiet:
+                print("[i] Initialising k-means model")
             self.model = TimeSeriesKMeans(**kwargs)
         elif self.config['timeseries']['method'] == 'k-medoids':
-            print("[i] Initialising k-medoids model")
+            if not quiet:
+                print("[i] Initialising k-medoids model")
             self.model = TimeSeriesKMedoids(**kwargs)
             dataset = to_sktime_dataset(dataset)
-        print("[i] Fitting model, please stand by")
+        if not quiet:
+            print("[i] Fitting model, please stand by")
 
         # actually fit the model
         self.model.fit(dataset)
@@ -646,21 +650,33 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         darray.to_netcdf(filename)
         print(f"[i] Saved labels to {filename}")
 
-    def clustering_metrics(self, n_min=2, n_max=10):
+    def clustering_metrics(self, n_min=2, n_max=10, show=True):
         inertias = []
-        sil_scores = []
-        ch_scores = []
-        db_scores = []
+
+        if show:
+            sil_scores = []
+            ch_scores = []
+            db_scores = []
         dataset = self.__make_dataset()
         n_range = range(n_min, n_max+1)
-        for n in tqdm(n_range, desc='[i] Running metrics for n_clusters = '):
-            self._fit_model(n_clusters=n, dataset=dataset)
+        for n in tqdm(n_range, desc='[i] metrics: ', leave=True, position=1):
+            self._fit_model(n_clusters=n, dataset=dataset, quiet=True)
             labels = self.model.labels_
             inertias.append(self.model.inertia_)
-            sil_scores.append(
-                silhouette_score(dataset, labels, metric='euclidean'))
-            ch_scores.append(calinski_harabasz_score(dataset[:, :, 0], labels))
-            db_scores.append(davies_bouldin_score(dataset[:, :, 0], labels))
+            if show:
+                sil_scores.append(
+                    silhouette_score(dataset, labels, metric='euclidean'))
+                ch_scores.append(calinski_harabasz_score(dataset[:, :, 0],
+                                                         labels))
+                db_scores.append(davies_bouldin_score(dataset[:, :, 0],
+                                                      labels))
+
+        kn = KneeLocator(x=n_range,
+                         y=inertias,
+                         curve='convex',
+                         direction='decreasing')
+        if not show:
+            return kn.knee
 
         fig, axes = plt.subplots(4, 1)
         scores = [inertias, sil_scores, ch_scores, db_scores]
@@ -671,7 +687,11 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         for (ax, score, title) in zip(axes, scores, titles):
             ax.plot(n_range, score)
             ax.set_title(title)
+        axes[0].axvline(kn.knee)
+
         plt.show()
+
+        return kn.knee
 
 
 class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
@@ -708,16 +728,19 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         labels2step[:, :, 0] = labels
 
         # for each shape cluster
-        for label in range(0, n_clusters):
+        for label in tqdm(range(0, n_clusters),
+                          leave=True, position=0,
+                          desc='[i] subdividing cluster: '):
 
             self.__mask_cluster(labels, label)
 
             # run algorithm again on these points, without normalisation
-            self._fit_model()
+            elbow = self.clustering_metrics(show=False)
+            self._fit_model(n_clusters=elbow, quiet=True)
 
             # get the labels for current subcluster
             sublabels = self._make_labels_shaped()
-            sublabels = self.__reorder_labels(sublabels)
+            sublabels = self.__reorder_sublabels(sublabels)
 
             # for every grid point that is not nan
             for arg in np.argwhere(~np.isnan(sublabels)):
@@ -747,7 +770,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         # re-buld the time series dataset (now restricted to this cluster)
         self._set_ts()
 
-    def __reorder_labels(self, labels):
+    def __reorder_sublabels(self, labels):
 
         # prepare an empty array to hold the average variance of each cluster
         n_clusters = int(np.nanmax(labels) + 1)
