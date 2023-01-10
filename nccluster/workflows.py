@@ -645,7 +645,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         coords = dict(reversed(list(coords.items())))
         return coords
 
-    def save_clustering_results(self, filename):
+    def save_labels(self, filename):
         darray = self._make_labels_data_array()
         darray.to_netcdf(filename)
         print(f"[i] Saved labels to {filename}")
@@ -842,7 +842,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
             for barycenter in barycenters:
                 ax.plot(barycenter.ravel(), color='magenta', linewidth=0.5)
 
-    def save_clustering_results(self, filename):
+    def save_labels(self, filename):
         labels_darray = self._make_labels_data_array(step=0)
         sublabels_darray = self._make_labels_data_array(step=1)
         coords = self._make_xy_coords()
