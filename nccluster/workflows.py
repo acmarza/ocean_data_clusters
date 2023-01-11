@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import nctoolkit as nc
 import numpy as np
 import pandas as pd
+import pickle
 import xarray as xr
 
 from kneed import KneeLocator
@@ -547,6 +548,9 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
                 print("[i] Initialising k-medoids model")
             self.model = TimeSeriesKMedoids(**kwargs)
             dataset = to_sktime_dataset(dataset)
+        else:
+            print('[fatal] Unrecognised clustering method specified')
+            exit()
         if not quiet:
             print("[i] Fitting model, please stand by")
 
@@ -650,6 +654,26 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         darray.to_netcdf(filename)
         print(f"[i] Saved labels to {filename}")
 
+    def save_centroids(self, filename):
+        # if no normalisation, can save the centers as they are
+        if not self.config['timeseries'].getboolean('scaling'):
+            centers = self.model.cluster_centers_
+        # otherwise, the original amplitudes are irrecoverable
+        # need to get the timeseries for each cluster and compute centers
+        else:
+            centers = self._make_centers()
+
+        with open(filename, 'wb') as file:
+            pickle.dump(centers, file)
+
+    def _make_centers(self):
+        centers = []
+        for label in range(self.model.n_clusters):
+            cluster_tss = self.ts[self.model.labels_ == label]
+            cluster_center = euclidean_barycenter(cluster_tss)
+            centers.append(cluster_center)
+        return centers
+
     def clustering_metrics(self, n_min=2, n_max=10, show=True):
         inertias = []
 
@@ -696,6 +720,10 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
 
 class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
 
+    def _setters(self):
+        super()._setters()
+        self.centroids_dict = {}
+
     def run(self):
         print("[i] This workflow will override the config setting for scaling")
         self.cluster()
@@ -705,6 +733,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         # set scaling on to form shape-based clusters
         self.config['timeseries']['scaling'] = 'True'
         self._fit_model()
+        self.centroids_dict['clusters'] = self._make_centers()
 
         # set scaling off to form amplitude-based subclusters
         self.config['timeseries']['scaling'] = 'False'
@@ -737,6 +766,8 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
             # run algorithm again on these points, without normalisation
             elbow = self.clustering_metrics(show=False)
             self._fit_model(n_clusters=elbow, quiet=True)
+            self.centroids_dict['cluster_' + str(label)] =\
+                self.model.cluster_centers_
 
             # get the labels for current subcluster
             sublabels = self._make_labels_shaped()
@@ -750,7 +781,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
                 # set the subcluster label in the two-step map (second column)
                 labels2step[yi, xi, 1] = sublabels[yi, xi]
 
-        # reset the mask  to its original state now we're done with subclusters
+        # reset the mask to its original state now we're done with subclusters
         self.mask = None
         self._set_ts()
 
@@ -853,6 +884,10 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
 
         dataset.to_netcdf(filename)
         print(f"[i] Saved labels and sublabels to {filename}")
+
+    def save_centroids(self, filename):
+        with open(filename, 'wb') as file:
+            pickle.dump(self.centroids_dict, file)
 
     def _make_labels_data_array(self, step=0):
         # override
