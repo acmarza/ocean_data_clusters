@@ -916,13 +916,18 @@ class dRWorkflow(RadioCarbonWorkflow):
         self._ds.top()
 
         # define new surface variable, dR = local_age - mean surface age
+        self.__compute_avgR()
         self.__compute_dR()
 
     def __compute_dR(self):
 
         # compute R-age difference from surface mean
-        self._ds.assign(dR=lambda x:
-                        x.local_age - spatial_mean(x.local_age))
+        self._ds.assign(dR=lambda x: x.local_age - x.avgR)
+
+    def __compute_avgR(self):
+
+        # compute mean surface R-age
+        self._ds.assign(avgR=lambda x: spatial_mean(x.local_age))
 
 
 class DendrogramWorkflow(RadioCarbonWorkflow):
