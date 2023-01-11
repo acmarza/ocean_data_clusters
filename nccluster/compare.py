@@ -1,12 +1,12 @@
 import matplotlib.pyplot as plt
 import nctoolkit as nc
 import numpy as np
-import os
+import pickle
 import xarray as xr
 import xesmf as xe
 
 from matplotlib.colors import Normalize
-from matplotlib.cm import get_cmap, Greys, ScalarMappable
+from matplotlib.cm import get_cmap, Greys
 from matplotlib_venn import venn2
 from matplotlib.widgets import Slider
 from nccluster.workflows import dRWorkflow
@@ -192,35 +192,39 @@ class ClusterMatcher:
 
 class DdR_Histogram:
 
-    def __init__(self, config_path1, config_path2, labels_savefile):
-        # initialise workflows (letting them compute surface ocean dR)
-        wf1 = dRWorkflow(config_path1)
-        wf2 = dRWorkflow(config_path2)
+    def __init__(self, config_path, labels_savefile, centers_savefile):
+        # initialise workflow (letting it compute surface ocean dR)
+        wf = dRWorkflow(config_path)
 
         # load in the subcluster assignments
         labels_ds = nc.DataSet(labels_savefile)
 
-        # regrid everything to second workflow's dataset
-        wf1.regrid_to_ds(wf2._ds)
-
         # use nearest neighbor (not interpolate!) to regrid integer labels
-        labels_ds.regrid(wf2._ds, method="nn")
+        labels_ds.regrid(wf._ds, method="nn")
 
-        # initialise the attributes we'll need
-        self.dR1 = wf1.ds_var_to_array('dR')
-        self.dR2 = wf2.ds_var_to_array('dR')
+        # load in centers dict
+        with open(centers_savefile, 'rb') as file:
+            self.centers_dict = pickle.load(file)
+
+        # subtract surface mean R-age from centers to get their dRs
+        avgR = wf.ds_var_to_array('avgR')
+        for key in self.centers_dict.keys():
+            print(f'{key}:{np.array(self.centers_dict[key]).shape}')
+            self.centers_dict[key] -= avgR
+
+        # shorthand for frequently used arrays
+        self.dR = wf.ds_var_to_array('dR')[:, 0, :, :]
+        self.ages_ts = wf.ds_var_to_array('local_age')[:, 0, :, :]
         self.labels = labels_ds.to_xarray()['labels'].values
         self.sublabels = labels_ds.to_xarray()['sublabels'].values
-        self.time1 = 0
-        self.time2 = 0
-        self.__set_DdR()
 
-        # plot the subclustesr on a map
+        # the timeslice for the dR map
+        self.time = 0
+
+        # initialise main figure
         self.fig = plt.figure()
-        filename1 = os.path.basename(config_path1)
-        filename2 = os.path.basename(config_path2)
-        self.fig.suptitle(f"{filename1} vs. {filename2}")
 
+        # plot the subclusters on a map
         cmap = Greys
         cmap.set_bad('tan')
         self.map_ax = self.fig.add_subplot(221)
@@ -232,82 +236,65 @@ class DdR_Histogram:
         self.__cid = self.fig.canvas.mpl_connect(
             'button_press_event', self.__process_click)
 
-        # init the DdR map
+        # init the dR map
         self.dR_ax = self.fig.add_subplot(223)
-        self.dR_ax.set_title('dR1 - dR2')
-        self.dR_map = self.dR_ax.imshow(self.DdR, origin='lower')
-
-        vmin = np.nanmin(self.dR1) - np.nanmax(self.dR2)
-        vmax = np.nanmax(self.dR1) - np.nanmin(self.dR2)
-        norm = Normalize(vmin=vmin, vmax=vmax)
-        cax = self.dR_ax.inset_axes([1.04, 0, 0.05, 1])
-        self.fig.colorbar(ScalarMappable(norm=norm, cmap='viridis'),
-                          ax=self.dR_ax, cax=cax)
+        self.__refresh_dR_map()
 
         # init the histogram plot
         self.hist_ax = self.fig.add_subplot(224)
+        self.ts_ax = self.fig.add_subplot(222)
 
-        # sliders for adjusting timeslices
-        slider1_ax = self.fig.add_subplot(422)
-        slider2_ax = self.fig.add_subplot(424)
+        # slider for adjusting the timeslice
+        slider_ax = self.fig.add_subplot(20, 2, 22)
+        self.time_slider = Slider(ax=slider_ax,
+                                  label='dR map time slice',
+                                  valmin=0,
+                                  valmax=self.dR.shape[0]-1,
+                                  valstep=1)
+        self.time_slider.on_changed(self.__set_timeslice)
 
-        self.time1_slider = Slider(ax=slider1_ax,
-                                   label='Dataset 1 time slice',
-                                   valmin=0,
-                                   valmax=self.dR1.shape[0]-1,
-                                   valstep=1)
-
-        self.time2_slider = Slider(ax=slider2_ax,
-                                   label='Dataset 2 time slice',
-                                   valmin=0,
-                                   valmax=self.dR2.shape[0]-1,
-                                   valstep=1)
-
-        self.time1_slider.on_changed(self.__set_time1)
-        self.time2_slider.on_changed(self.__set_time2)
-
+        # show the figure
         plt.show()
 
-    def __set_time1(self, value=0):
-        self.time1 = value
-        self.__set_DdR()
-        self.__hists()
-        self.dR_map.set_data(self.DdR)
+    def __set_timeslice(self, value=0):
+        self.time = value
+        self.__refresh_dR_map()
 
-    def __set_time2(self, value=0):
-        self.time2 = value
-        self.__set_DdR()
-        self.__hists()
-        self.dR_map.set_data(self.DdR)
+    def __refresh_dR_map(self):
+        self.dR_ax.cla()
+        cax = self.dR_ax.inset_axes([1.04, 0, 0.05, 1])
+        img = self.dR_ax.imshow(self.dR[self.time], origin='lower')
+        self.fig.colorbar(img, ax=self.dR_ax, cax=cax)
 
     def __process_click(self, event):
+        # ignore clicks outside subcluster map
         if event.inaxes != self.map_ax:
             return
+
+        # unpack the click position
         x_pos = int(event.xdata)
         y_pos = int(event.ydata)
 
-        self.current_label = self.labels[y_pos, x_pos]
-        self.current_sublabel = self.sublabels[y_pos, x_pos]
+        # update attributes based on clicked data point
+        self.current_label = int(self.labels[y_pos, x_pos])
+        self.current_sublabel = int(self.sublabels[y_pos, x_pos])
 
-        self.__hists()
+        # re-compute the density plots
+        self.__density_plots()
 
-    def __set_DdR(self):
-        self.DdR = self.dR1[self.time1, 0] - self.dR2[self.time2, 0]
+    def __density_plots(self):
 
-    def __hists(self):
-
-        # shorthand
-        DdR = self.DdR
-
-        # boolean array that are True for points in current (sub)cluster
+        # construct a condition to extract the subcluster data points
         label_match = self.labels == self.current_label
         sublabel_match = self.sublabels == self.current_sublabel
+        cond = ~(label_match & sublabel_match)
 
-        # note the extra ~ in front of the conditions
-        # because the mask should be False where we show a point (True to mask)
-        intrasub = np.ma.masked_where(~(label_match & sublabel_match), DdR)
-        intra = np.ma.masked_where(~label_match, DdR)
-        extra = np.ma.masked_where(label_match, DdR)
+        # repeat the condition for every time slice
+        t, y, x = self.dR.shape
+        cond = np.repeat(np.array([cond]), repeats=t, axis=0)
+
+        # mask dR array to show current subcluster
+        intrasub = np.ma.masked_where(cond, self.dR)
 
         # remove previous overlay
         try:
@@ -315,25 +302,64 @@ class DdR_Histogram:
                 handle.remove()
         except AttributeError:
             pass
+
         # color in the clicked subcluster
-        self.subclust_overlay = self.map_ax.contourf(~np.isnan(intrasub))
+        self.subclust_overlay = self.map_ax.contourf(
+            ~np.isnan(intrasub[self.time]))
 
-        # intrasubcluster average
-        DdR_k = np.nanmean(intrasub)
+        # clear the time series plot
+        self.ts_ax.cla()
 
-        # remove nans, flatten and subtract subcluster average
-        intrasub, intra, extra = list(map(
-            lambda a: np.abs(a[~np.isnan(a)].flatten() - DdR_k),
-            [intrasub, intra, extra]
+        # plot time series for each subcluster member
+        subclust_tss = intrasub[~intrasub.mask]
+        for ts in np.reshape(subclust_tss, (t, -1)).T:
+            self.ts_ax.plot(ts, color='grey')
+
+        # extract and plot the subcluster center
+        subclust_center =\
+            self.centers_dict['cluster_' + str(self.current_label)]
+        subclust_center = subclust_center[self.current_sublabel]
+        subclust_line, = self.ts_ax.plot(subclust_center)
+
+        # extract and plot the cluster center
+        cluster_center = self.centers_dict['clusters'][self.current_label]
+        cluster_line, = self.ts_ax.plot(cluster_center)
+
+        # compute and plot global mean dR over time
+        # note to self the computation could be moved to init
+        avg_dR = np.nanmean(self.dR, axis=(1, 2))
+        avg_line, = self.ts_ax.plot(avg_dR)
+
+        # consistent y range
+        self.ts_ax.set_ylim([-1500, 1500])
+
+        # add labels
+        self.ts_ax.legend([subclust_line, cluster_line, avg_line],
+                          ['subcluster center dR',
+                           'cluster center dR',
+                           'surface mean dR'])
+
+        # self.fig.canvas.draw()
+        # return
+
+        # difference between subcluster dRs and each benchmark
+        # the .repeat().repeat() tiles the benchmark time series over the map
+        cf_subclust_c, cf_clust_c, cf_global_avg = list(map(
+            lambda benchmark:
+            intrasub - benchmark.reshape(t, 1, 1).repeat(y, 1).repeat(x, 2),
+            [subclust_center, cluster_center, avg_dR]
         ))
 
-        # compute densities and plot
-        densities = [gaussian_kde(data)
-                     for data in [intrasub, intra, extra]]
+        # drop NaNs, take absolute value, compute densities and plot
+        densities = list(map(
+            lambda arr: gaussian_kde(np.abs(arr[~arr.mask].flatten())),
+            [cf_subclust_c, cf_clust_c, cf_global_avg]
+        ))
         span = range(0, 750)
         self.hist_ax.cla()
         for dens in densities:
             self.hist_ax.plot(span, dens(span), linewidth=2, alpha=0.5)
-        self.hist_ax.axvline(0)
-        self.hist_ax.legend(['intrasub', 'intra', 'extra'])
+        self.hist_ax.legend(['cf_subclust_center',
+                             'cf_clust_center',
+                             'cf_global_average'])
         self.fig.canvas.draw()
