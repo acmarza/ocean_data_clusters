@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from tslearn.barycenters import euclidean_barycenter
+
 
 def make_subclusters_map(labels, sublabels):
     subclust_map = np.full_like(labels, np.nan)
@@ -33,3 +35,27 @@ def show_map(map, cmap='viridis'):
     plt.figure()
     plt.imshow(map, origin='lower', cmap=cmap)
     plt.show()
+
+
+def construct_barycenters(labels, sublabels, ts):
+    labels, sublabels = map(lambda arr: arr[~np.isnan(arr)].flatten(),
+                            [labels, sublabels])
+    subclust_sizes = make_subclust_sizes(labels, sublabels)
+    centers_dict = {}
+    centers_dict['clusters'] = []
+    centers_dict['subclusters'] = []
+
+    for label in range(int(np.nanmax(labels)) + 1):
+        label_match_cond = labels == label
+        cluster_tss = ts[label_match_cond]
+        cluster_center = euclidean_barycenter(cluster_tss)
+        centers_dict['clusters'].append(cluster_center)
+        subcluster_centers = []
+        for sublabel in range(subclust_sizes[int(label)]):
+            subclust_match_cond = sublabels == sublabel
+            subclust_tss = ts[label_match_cond & subclust_match_cond]
+            subclust_center = euclidean_barycenter(subclust_tss)
+            subcluster_centers.append(subclust_center)
+        centers_dict['subclusters'].append(subcluster_centers)
+
+    return centers_dict

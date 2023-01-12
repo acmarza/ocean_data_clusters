@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import nctoolkit as nc
 import numpy as np
-import pickle
 import xarray as xr
 import xesmf as xe
 
@@ -10,7 +9,7 @@ from matplotlib.cm import get_cmap, Greys
 from matplotlib_venn import venn2
 from matplotlib.widgets import Slider
 from nccluster.workflows import dRWorkflow
-from nccluster.utils import make_subclusters_map
+from nccluster.utils import make_subclusters_map, construct_barycenters
 from scipy.stats import gaussian_kde
 
 
@@ -192,7 +191,7 @@ class ClusterMatcher:
 
 class DdR_Histogram:
 
-    def __init__(self, config_path, labels_savefile, centers_savefile):
+    def __init__(self, config_path, labels_savefile):
         # initialise workflow (letting it compute surface ocean dR)
         wf = dRWorkflow(config_path)
 
@@ -202,21 +201,24 @@ class DdR_Histogram:
         # use nearest neighbor (not interpolate!) to regrid integer labels
         labels_ds.regrid(wf._ds, method="nn")
 
-        # load in centers dict
-        with open(centers_savefile, 'rb') as file:
-            self.centers_dict = pickle.load(file)
-
         # subtract surface mean R-age from centers to get their dRs
         avgR = wf.ds_var_to_array('avgR')
-        for key in self.centers_dict.keys():
-            print(f'{key}:{np.array(self.centers_dict[key]).shape}')
-            self.centers_dict[key] -= avgR
 
         # shorthand for frequently used arrays
         self.dR = wf.ds_var_to_array('dR')[:, 0, :, :]
-        self.ages_ts = wf.ds_var_to_array('local_age')[:, 0, :, :]
+        self.ts = wf._make_ts()
+        self.age_array = wf.ds_var_to_array('local_age')[:, 0]
         self.labels = labels_ds.to_xarray()['labels'].values
         self.sublabels = labels_ds.to_xarray()['sublabels'].values
+
+        # get the barycenter of each cluster and subcluster
+        # and convert to dR by subtracting surface mean
+        self.centers_dict = construct_barycenters(self.labels,
+                                                  self.sublabels,
+                                                  self.ts)
+        self.centers_dict['clusters'] -= avgR
+        for label in range(int(np.nanmax(self.labels) + 1)):
+            self.centers_dict['subclusters'][label] -= avgR
 
         # the timeslice for the dR map
         self.time = 0
@@ -245,7 +247,7 @@ class DdR_Histogram:
         self.ts_ax = self.fig.add_subplot(222)
 
         # slider for adjusting the timeslice
-        slider_ax = self.fig.add_subplot(20, 2, 22)
+        slider_ax = self.fig.add_subplot(20, 2, 21)
         self.time_slider = Slider(ax=slider_ax,
                                   label='dR map time slice',
                                   valmin=0,
@@ -312,13 +314,14 @@ class DdR_Histogram:
 
         # plot time series for each subcluster member
         subclust_tss = intrasub[~intrasub.mask]
+        # subclust_tss = self.age_array[~intrasub.mask]
         for ts in np.reshape(subclust_tss, (t, -1)).T:
             self.ts_ax.plot(ts, color='grey')
 
         # extract and plot the subcluster center
         subclust_center =\
-            self.centers_dict['cluster_' + str(self.current_label)]
-        subclust_center = subclust_center[self.current_sublabel]
+            self.centers_dict['subclusters'][
+                self.current_label][self.current_sublabel]
         subclust_line, = self.ts_ax.plot(subclust_center)
 
         # extract and plot the cluster center
@@ -344,7 +347,7 @@ class DdR_Histogram:
 
         # difference between subcluster dRs and each benchmark
         # the .repeat().repeat() tiles the benchmark time series over the map
-        cf_subclust_c, cf_clust_c, cf_global_avg = list(map(
+        DdR_subclust_center, DdR_clust_center, DdR_global_avg = list(map(
             lambda benchmark:
             intrasub - benchmark.reshape(t, 1, 1).repeat(y, 1).repeat(x, 2),
             [subclust_center, cluster_center, avg_dR]
@@ -353,13 +356,13 @@ class DdR_Histogram:
         # drop NaNs, take absolute value, compute densities and plot
         densities = list(map(
             lambda arr: gaussian_kde(np.abs(arr[~arr.mask].flatten())),
-            [cf_subclust_c, cf_clust_c, cf_global_avg]
+            [DdR_subclust_center, DdR_clust_center, DdR_global_avg]
         ))
         span = range(0, 750)
         self.hist_ax.cla()
         for dens in densities:
             self.hist_ax.plot(span, dens(span), linewidth=2, alpha=0.5)
-        self.hist_ax.legend(['cf_subclust_center',
-                             'cf_clust_center',
-                             'cf_global_average'])
+        self.hist_ax.legend(['DdR_subclust_center',
+                             'DdR_clust_center',
+                             'DdR_global_average'])
         self.fig.canvas.draw()

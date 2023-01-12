@@ -532,7 +532,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         # define the keyword arguments to pass to the model
         kwargs = {
             'n_clusters': n_clusters,
-            # 'max_iter': 10,
+            'max_iter': 10,
             'metric': 'euclidean'
         }
 
@@ -594,7 +594,8 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
                 # plot with a thin transparent line
                 ax.plot(ts.ravel(), color=color, alpha=.2)
             # plot the cluster barycenter
-            ax.plot(euclidean_barycenter(cluster_tss).ravel(), "r-")
+            ax.plot(self.model.cluster_centers_[label, 0], "k-")
+            ax.plot(euclidean_barycenter(cluster_tss).ravel(), "b:")
 
     def _map_clusters(self):
         # get the 2D labels array
@@ -886,8 +887,20 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         print(f"[i] Saved labels and sublabels to {filename}")
 
     def save_centroids(self, filename):
+        # bug: does not match reordered labeld
+        centroids_dict = self.centroids_dict
+
+        # fix inconsistent dimensions between clustering algorithms
+        # in this case ensure output is (n_clusters, n_time_steps, n_dims)
+        # i.e. force tslearn format over sktime
+        # code block untested!
+        for key in centroids_dict.keys():
+            if centroids_dict[key].shape[1] == 1:
+                centroids_dict[key] = np.moveaxis(
+                    centroids_dict[key], 1, 2)
+
         with open(filename, 'wb') as file:
-            pickle.dump(self.centroids_dict, file)
+            pickle.dump(centroids_dict, file)
 
     def _make_labels_data_array(self, step=0):
         # override
@@ -906,7 +919,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         return data_array
 
 
-class dRWorkflow(RadioCarbonWorkflow):
+class dRWorkflow(TimeSeriesWorkflowBase):
 
     def _preprocess_ds(self):
         # compute local age from radiocarbon
