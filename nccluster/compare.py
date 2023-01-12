@@ -60,25 +60,33 @@ class ClusterMatcher:
 
         plt.rcParams['figure.constrained_layout.use'] = True
         plt.figure()
-        self.ax1 = plt.subplot(221)
-        self.ax2 = plt.subplot(222)
+        self.left_map = plt.subplot(221)
+        self.right_map = plt.subplot(222)
 
         hatches = ["", "/\\/\\/\\/\\"]
 
         # show left map and hatch based on overlap mask
-        self.ax1.imshow(self.labels_left.values,
-                        origin='lower', cmap=self.cmap)
-        self.ax1.contourf(overlap_mask, 1, hatches=hatches, alpha=0)
+        self.left_map.imshow(self.labels_left.values,
+                             origin='lower', cmap=self.cmap)
+        self.left_map.contourf(overlap_mask, 1, hatches=hatches, alpha=0)
 
         # show right map and hatch based on overlap mask
-        self.ax2.imshow(self.labels_right.values,
-                        origin='lower', cmap=self.cmap)
-        self.ax2.contourf(overlap_mask, 1, hatches=hatches, alpha=0)
+        self.right_map.imshow(self.labels_right.values,
+                              origin='lower', cmap=self.cmap)
+        self.right_map.contourf(overlap_mask, 1, hatches=hatches, alpha=0)
 
         n_clusters = self.__get_n_clusters()
         for clust in range(n_clusters):
             ax = plt.subplot(2, n_clusters, n_clusters + clust + 1)
             self.plot_venn(clust, ax)
+
+        equal = np.equal(self.labels_left.values, self.labels_right.values)
+        n_equal = equal.sum()
+        notnan = self.labels_left.values[~np.isnan(self.labels_left.values)]
+        n_notnan = notnan.size
+        overlap = int(n_equal) / n_notnan
+        title = f'Total label overlap: {overlap:.0%}'
+        plt.suptitle(title)
 
         # show figure
         plt.show()
@@ -100,8 +108,11 @@ class ClusterMatcher:
                      ax=ax)
 
         # use black edges on the venn diagram
-        for patch in venn.patches:
-            patch.set(edgecolor='black')
+        try:
+            for patch in venn.patches:
+                patch.set(edgecolor='black')
+        except AttributeError:
+            pass
 
     def regrid_left_to_right(self):
         # create regridder object with the input coords of left map
