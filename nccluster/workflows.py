@@ -532,7 +532,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         # define the keyword arguments to pass to the model
         kwargs = {
             'n_clusters': n_clusters,
-            'max_iter': 10,
+            # 'max_iter': 10,
             'metric': 'euclidean'
         }
 
@@ -594,8 +594,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
                 # plot with a thin transparent line
                 ax.plot(ts.ravel(), color=color, alpha=.2)
             # plot the cluster barycenter
-            ax.plot(self.model.cluster_centers_[label, 0], "k-")
-            ax.plot(euclidean_barycenter(cluster_tss).ravel(), "b:")
+            ax.plot(euclidean_barycenter(cluster_tss).ravel(), "k-")
 
     def _map_clusters(self):
         # get the 2D labels array

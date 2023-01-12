@@ -25,7 +25,7 @@ def main():
         print(f"[!] Unrecognised option {args.method}")
 
     wf.cluster()
-    wf.save_clustering_results(args.file)
+    wf.save_labels(args.file)
 
 
 if __name__ == "__main__":
