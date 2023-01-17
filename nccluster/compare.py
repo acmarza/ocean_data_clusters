@@ -11,6 +11,7 @@ from matplotlib.widgets import Slider
 from nccluster.workflows import dRWorkflow
 from nccluster.utils import make_subclusters_map, construct_barycenters
 from scipy.stats import gaussian_kde
+from sklearn.metrics import pairwise_distances
 
 
 class ClusterMatcher:
@@ -217,16 +218,16 @@ class DdR_Histogram:
 
         # shorthand for frequently used arrays
         self.dR = wf.ds_var_to_array('dR')[:, 0, :, :]
-        self.ts = wf._make_ts()
         self.age_array = wf.ds_var_to_array('local_age')[:, 0]
         self.labels = labels_ds.to_xarray()['labels'].values
         self.sublabels = labels_ds.to_xarray()['sublabels'].values
 
         # get the barycenter of each cluster and subcluster
         # and convert to dR by subtracting surface mean
+        ts = wf._make_ts()
         self.centers_dict = construct_barycenters(self.labels,
                                                   self.sublabels,
-                                                  self.ts)
+                                                  ts)
         self.centers_dict['clusters'] -= avgR
         for label in range(int(np.nanmax(self.labels) + 1)):
             self.centers_dict['subclusters'][label] -= avgR
@@ -279,6 +280,24 @@ class DdR_Histogram:
         img = self.dR_ax.imshow(self.dR[self.time], origin='lower')
         self.fig.colorbar(img, ax=self.dR_ax, cax=cax)
 
+    def __get_mask(self, label, sublabel):
+        # construct a condition to extract the subcluster data points
+        label_match = self.labels == label
+        sublabel_match = self.sublabels == sublabel
+        mask = ~(label_match & sublabel_match)
+
+        # repeat the condition for every time slice
+        mask = np.repeat(np.array([mask]), repeats=self.dR.shape[0], axis=0)
+        return mask
+
+    def __find_loc_like_subclust_center(self, mask, subclust_center):
+        subclust_ages = np.ma.masked_where(mask, self.age_array)
+        subclust_tss = subclust_ages[~subclust_ages.mask]
+        subclust_tss = np.reshape(subclust_tss, (subclust_ages.shape[0], -1)).T
+
+        similarities = pairwise_distances(subclust_tss, metric='cosine')
+        return
+
     def __process_click(self, event):
         # ignore clicks outside subcluster map
         if event.inaxes != self.map_ax:
@@ -289,25 +308,25 @@ class DdR_Histogram:
         y_pos = int(event.ydata)
 
         # update attributes based on clicked data point
-        self.current_label = int(self.labels[y_pos, x_pos])
-        self.current_sublabel = int(self.sublabels[y_pos, x_pos])
+        label = int(self.labels[y_pos, x_pos])
+        sublabel = int(self.sublabels[y_pos, x_pos])
+        mask = self.__get_mask(label, sublabel)
+
+        # extract and plot the (sub)cluster center
+        cluster_center = self.centers_dict['clusters'][label]
+        subclust_center = self.centers_dict['subclusters'][label][sublabel]
 
         # re-compute the density plots
-        self.__density_plots()
+        self.__density_plots(mask, cluster_center, subclust_center)
 
-    def __density_plots(self):
+        # identify the subcluster member that best approximates the centroid
+        self.__find_loc_like_subclust_center(mask, subclust_center)
 
-        # construct a condition to extract the subcluster data points
-        label_match = self.labels == self.current_label
-        sublabel_match = self.sublabels == self.current_sublabel
-        cond = ~(label_match & sublabel_match)
+    def __density_plots(self, mask, cluster_center, subclust_center):
 
-        # repeat the condition for every time slice
         t, y, x = self.dR.shape
-        cond = np.repeat(np.array([cond]), repeats=t, axis=0)
-
         # mask dR array to show current subcluster
-        intrasub = np.ma.masked_where(cond, self.dR)
+        intrasub = np.ma.masked_where(mask, self.dR)
 
         # remove previous overlay
         try:
@@ -325,18 +344,14 @@ class DdR_Histogram:
 
         # plot time series for each subcluster member
         subclust_tss = intrasub[~intrasub.mask]
+        print(subclust_tss.shape)
         # subclust_tss = self.age_array[~intrasub.mask]
         for ts in np.reshape(subclust_tss, (t, -1)).T:
             self.ts_ax.plot(ts, color='grey')
 
-        # extract and plot the subcluster center
-        subclust_center =\
-            self.centers_dict['subclusters'][
-                self.current_label][self.current_sublabel]
         subclust_line, = self.ts_ax.plot(subclust_center)
 
         # extract and plot the cluster center
-        cluster_center = self.centers_dict['clusters'][self.current_label]
         cluster_line, = self.ts_ax.plot(cluster_center)
 
         # compute and plot global mean dR over time
@@ -353,11 +368,6 @@ class DdR_Histogram:
                            'cluster center dR',
                            'surface mean dR'])
 
-        # self.fig.canvas.draw()
-        # return
-
-        # difference between subcluster dRs and each benchmark
-        # the .repeat().repeat() tiles the benchmark time series over the map
         DdR_subclust_center, DdR_clust_center, DdR_global_avg = list(map(
             lambda benchmark:
             intrasub - benchmark.reshape(t, 1, 1).repeat(y, 1).repeat(x, 2),
