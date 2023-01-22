@@ -380,24 +380,25 @@ class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
 
         fig.show()
 
-    def _make_ts_array(self):
-        # remember age_array.shape = (t, z, y, x)
+    def _make_ts_array(self, var='local_age'):
+        # remember shape = (t, z, y, x)
         # we want ts_array.shape = (n, t) at z=0 with n=x*y
         # note the -1 in np.reshape tells it to figure out n on its own
-        ts_array = np.ma.masked_array(self._age_array[:, 0], self.mask)
+        data_arr = self.ds_var_to_array(var)[:, 0]
+        ts_array = np.ma.masked_array(data_arr, self.mask)
         ts_array = np.reshape(ts_array,
                               newshape=(ts_array.shape[0], -1)).T
         return ts_array
 
-    def _make_df(self):
+    def _make_df(self, var='local_age'):
         # convenience function to get time series as dataframe
-        ts_array = self._make_ts_array()
+        ts_array = self._make_ts_array(var)
         df = pd.DataFrame(ts_array)
         return df
 
-    def _make_ts(self):
+    def _make_ts(self, var='local_age'):
         # convenience function to get a tslearn-formatted time series array
-        df = self._make_df()
+        df = self._make_df(var)
         ts_droppedna_array = np.array(df.dropna())
         ts = to_time_series_dataset(ts_droppedna_array)
         return ts
