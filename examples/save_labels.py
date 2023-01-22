@@ -9,12 +9,12 @@ from nccluster.workflows import TwoStepTimeSeriesClusterer
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config',
+    parser.add_argument('-c', '--config', required=True,
                         help="config file for time series clustering")
-    parser.add_argument('-m', '--method',
+    parser.add_argument('-m', '--method', required=True,
                         help='which method to use (ts = time series clustering\
                         ;two = two-step time series clustering)')
-    parser.add_argument('-f', '--file',
+    parser.add_argument('-f', '--file', required=True,
                         help="save file (.nc) for resulting labels")
     args = parser.parse_args()
     if args.method == 'ts':

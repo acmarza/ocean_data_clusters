@@ -7,9 +7,9 @@ from nccluster.compare import DdR_Histogram
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config',
+    parser.add_argument('-c', '--config', required=True,
                         help='the config file for the dataset')
-    parser.add_argument('-l', '--labels',
+    parser.add_argument('-l', '--labels', required=True,
                         help='.nc file containing subcluster labels')
     args = parser.parse_args()
 
