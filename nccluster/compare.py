@@ -304,8 +304,24 @@ class DdR_Histogram:
         self.subclust_overlay = self.map_ax.contourf(cosines_shaped,
                                                      cmap='coolwarm')
 
+        # add colorbar for the similarity levels
         self.fig.colorbar(self.subclust_overlay, ax=self.map_ax,
                           cax=self.cos_cax, cmap='coolwarm')
+
+        # remove previous marker
+        try:
+            for handle in self.marker:
+                handle.remove()
+        except AttributeError:
+            pass
+
+        # put a star on the grid point with highest similarity
+        idx_flat = np.nanargmax(cosines_shaped)
+        marker_x, marker_y = np.unravel_index(idx_flat, cosines_shaped.shape)
+        self.marker = self.map_ax.plot(marker_y, marker_x,
+                                       color='magenta',
+                                       marker="*")
+
         return
 
     def __process_click(self, event):
