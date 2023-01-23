@@ -6,7 +6,6 @@ import xesmf as xe
 from matplotlib.colors import Normalize
 from matplotlib.cm import get_cmap, Greys
 from matplotlib_venn import venn2
-from matplotlib.widgets import Slider
 from nccluster.workflows import dRWorkflow
 from nccluster.utils import make_subclusters_map, construct_barycenters
 from numpy.linalg import norm
@@ -242,7 +241,7 @@ class DdR_Histogram:
         # plot the subclusters on a map
         cmap = Greys
         cmap.set_bad('tan')
-        self.map_ax = self.fig.add_subplot(221)
+        self.map_ax = self.fig.add_subplot(121)
         self.map_ax.set_title('Subcluster map')
         self.map_ax.imshow(make_subclusters_map(self.labels, self.sublabels),
                            origin='lower', cmap=cmap)
@@ -252,35 +251,13 @@ class DdR_Histogram:
         self.__cid = self.fig.canvas.mpl_connect(
             'button_press_event', self.__process_click)
 
-        # init the dR map
-        self.dR_ax = self.fig.add_subplot(223)
-        self.__refresh_dR_map()
-
         # init the histogram plot
-        self.hist_ax = self.fig.add_subplot(224)
-        self.ts_ax = self.fig.add_subplot(222)
-
-        # slider for adjusting the timeslice
-        slider_ax = self.fig.add_subplot(20, 2, 21)
-        self.time_slider = Slider(ax=slider_ax,
-                                  label='dR map time slice',
-                                  valmin=0,
-                                  valmax=self.dR.shape[0]-1,
-                                  valstep=1)
-        self.time_slider.on_changed(self.__set_timeslice)
+        self.hist_ax = self.fig.add_subplot(222)
+        self.ts_ax = self.fig.add_subplot(224)
 
         # show the figure
+        plt.tight_layout()
         plt.show()
-
-    def __set_timeslice(self, value=0):
-        self.time = value
-        self.__refresh_dR_map()
-
-    def __refresh_dR_map(self):
-        self.dR_ax.cla()
-        cax = self.dR_ax.inset_axes([1.04, 0, 0.05, 1])
-        img = self.dR_ax.imshow(self.dR[self.time], origin='lower')
-        self.fig.colorbar(img, ax=self.dR_ax, cax=cax)
 
     def __get_mask(self, label, sublabel):
         # construct a condition to extract the subcluster data points
