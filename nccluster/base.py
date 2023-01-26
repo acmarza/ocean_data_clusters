@@ -13,6 +13,7 @@ class Workflow:
         self.config_path = config_path
         self.__read_config_file()
         atexit.register(self.__offer_save_config)
+        nc.options(lazy=False)
 
         # make sure all required fields are defined in the config
         # before loading the data from file and applying any preprocessing
@@ -178,6 +179,7 @@ unsaved changes to {self.config_path}.")
         print("[!] Nothing to run. Did you forget to override self.run()?")
 
     def list_plottable_vars(self):
+        print('[i] Variables in dataset:')
         # get an alphabetical list of plottable variables
         plottable_vars = self._ds.variables
 
@@ -214,7 +216,7 @@ unsaved changes to {self.config_path}.")
             # pass on the data array to interactive viewer
             MultiSliceViewer(data_to_plot, plot_title).show()
 
-        except IndexError:
+        except ValueError:
             print(f"[!] {var_to_plot} not found; check spelling")
 
     def ds_var_to_array(self, var_name):
@@ -228,3 +230,16 @@ unsaved changes to {self.config_path}.")
         as_array = as_xr[var_name].values
 
         return as_array
+
+    def interactive_var_plot(self):
+        try:
+            while True:
+                # get the name of the variable the user wants to plot
+                var_to_plot = input(
+                    "[>] Type a variable to plot or Ctrl+C to quit plotting: "
+                )
+                self.plot_var(var_to_plot)
+
+        except KeyboardInterrupt:
+            # Ctrl+C to exit loop
+            pass

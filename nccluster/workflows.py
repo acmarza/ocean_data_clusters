@@ -1,10 +1,7 @@
 # import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-import nctoolkit as nc
 import numpy as np
 import pandas as pd
-import pickle
-import xarray as xr
 
 from sklearn.cluster import KMeans
 from sklearn.pipeline import Pipeline
@@ -16,8 +13,6 @@ from nccluster.multisliceviewer import MultiSliceViewer
 from nccluster.corrviewer import CorrelationViewer, DendrogramViewer
 from nccluster.radiocarbon import RadioCarbonWorkflow
 from nccluster.ts import TimeSeriesWorkflowBase
-
-nc.options(lazy=False)
 
 
 class CorrelationWorkflow(TimeSeriesWorkflowBase):
@@ -121,7 +116,7 @@ class KMeansWorkflowBase(Workflow):
         except KeyError:
             # let the user view and plot available variables
             self.list_plottable_vars()
-            self.__interactive_var_plot()
+            self.interactive_var_plot()
             # finally ask user which vars to use
             selected_vars = input(
                 "\n[>] Type the variables to use in kmeans " +
@@ -130,20 +125,6 @@ class KMeansWorkflowBase(Workflow):
 
         print(f"[i] Selected variables for k-means: {selected_vars}")
         self.selected_vars = selected_vars
-
-    def __interactive_var_plot(self):
-        try:
-            while True:
-                # get the name of the variable the user wants to plot
-                var_to_plot = input(
-                    "[>] Type a variable to plot or Ctrl+C to"
-                    " proceed to choosing k-means parameters: "
-                )
-                self.plot_var(var_to_plot)
-
-        except KeyboardInterrupt:
-            # Ctrl+C to exit loop
-            pass
 
     def __set_pipeline(self):
         # construct the data processing pipeline including scaling and k-means
