@@ -3,8 +3,8 @@ import sys
 
 sys.path.append('.')
 
-from nccluster.workflows import TimeSeriesClusteringWorkflow
-from nccluster.workflows import TwoStepTimeSeriesClusterer
+from nccluster.ts import TimeSeriesClusteringWorkflow
+from nccluster.ts import TwoStepTimeSeriesClusterer
 
 
 def main():
