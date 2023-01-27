@@ -86,6 +86,8 @@ class ClusterMatcher:
         overlap = int(n_equal) / n_notnan
         title = f'Total label overlap: {overlap:.0%}'
         plt.suptitle(title)
+        self.left_map.set_title(self.labels_left.long_name)
+        self.right_map.set_title(self.labels_right.long_name)
 
         # show figure
         plt.show()
