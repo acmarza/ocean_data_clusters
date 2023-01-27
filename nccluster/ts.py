@@ -97,7 +97,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         self.__check_clustering_method()
         self.__check_scaling_bool()
         self.__check_labels_long_name()
-        self.__check_cmap()
+        self.__check_palette()
 
     def _setters(self):
         super()._setters()
@@ -152,7 +152,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
             confirm_msg='[i] Labels variable long name: '
         )
 
-    def __check_cmap(self):
+    def __check_palette(self):
         self._check_config_option(
             'default', 'palette',
             required=True,
@@ -452,7 +452,8 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         subclusters_map = make_subclusters_map(self.labels2step[:, :, 0],
                                                self.labels2step[:, :, 1])
         ax = self.fig.add_subplot(122)
-        ax.imshow(subclusters_map, origin='lower', cmap='twilight')
+        ax.imshow(subclusters_map, origin='lower',
+                  cmap=self.config['default']['palette'])
 
     def _plot_ts_clusters(self):
         sublabels = self.labels2step[:, :, 1]
@@ -466,7 +467,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
 
         interval = 0.5
         norm = Normalize(vmin=0-interval/2, vmax=n_clusters-1+interval/2)
-        cmap = get_cmap('twilight')
+        cmap = get_cmap(self.config['default']['palette'])
 
         # for each cluster/label
         for label in range(n_clusters):
@@ -490,7 +491,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
                 barycenters.append(barycenter)
             # need to plot these last else they'd be covered by subcluster ts
             for barycenter in barycenters:
-                ax.plot(barycenter.ravel(), color='magenta', linewidth=0.5)
+                ax.plot(barycenter.ravel(), color='black', linewidth=0.5)
 
     def save_labels(self, filename):
         labels_darray = self._make_labels_data_array(step=0)
