@@ -9,7 +9,7 @@ from matplotlib.cm import get_cmap
 from matplotlib.colors import Normalize
 from nccluster.radiocarbon import RadioCarbonWorkflow
 from nccluster.utils import make_subclusters_map, make_subclust_sizes,\
-    get_sublabel_colorval
+    get_sublabel_colorval, make_xy_coords
 from sklearn.metrics import calinski_harabasz_score, davies_bouldin_score
 from sktime.clustering.k_medoids import TimeSeriesKMedoids
 from tqdm import tqdm
@@ -147,7 +147,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
     def __check_labels_long_name(self):
         self._check_config_option(
             'default', 'labels_long_name',
-            required=False,
+            required=True,
             default='Time series clustering results',
             confirm_msg='[i] Labels variable long name: '
         )
@@ -257,7 +257,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
 
         # get the raw labels array
         labels_shaped = self._make_labels_shaped()
-        coords = self._make_xy_coords()
+        coords = make_xy_coords(self._ds)
         long_name = self.config['default']['labels_long_name']
         # create the data array from our labels and
         # the x-y coords copied from the original dataset
@@ -267,22 +267,6 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
                                   attrs={'long_name': long_name}
                                   )
         return data_array
-
-    def _make_xy_coords(self):
-
-        # copy the coords of the original dataset, but keep only x and y
-        all_coords = self._ds.to_xarray().coords
-        coords = {}
-        for key in all_coords:
-            try:
-                if all_coords[key].axis in ('X', 'Y'):
-                    coords[key] = all_coords[key]
-            except AttributeError:
-                pass
-        # arcane magic to put the coordinates in reverse order
-        # because otherwise DataArray expects the transpose of what we have
-        coords = dict(reversed(list(coords.items())))
-        return coords
 
     def save_labels(self, filename):
         darray = self._make_labels_data_array()
@@ -511,7 +495,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
     def save_labels(self, filename):
         labels_darray = self._make_labels_data_array(step=0)
         sublabels_darray = self._make_labels_data_array(step=1)
-        coords = self._make_xy_coords()
+        coords = make_xy_coords(self._ds)
         dataset = xr.Dataset({'labels': labels_darray,
                               'sublabels': sublabels_darray},
                              coords=coords
@@ -540,7 +524,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         # override
         # get the raw labels array
         labels_shaped = self.labels2step[:, :, step]
-        coords = self._make_xy_coords()
+        coords = make_xy_coords(self._ds)
         option = 'labels_long_name' if step == 0 else 'sublabels_long_name'
         long_name = self.config['default'][option]
         # create the data array from our labels and

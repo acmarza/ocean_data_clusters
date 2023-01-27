@@ -59,3 +59,18 @@ def construct_barycenters(labels, sublabels, ts):
         centers_dict['subclusters'].append(subcluster_centers)
 
     return centers_dict
+
+def make_xy_coords(ds):
+    # copy the coords of the original dataset, but keep only x and y
+    all_coords = ds.to_xarray().coords
+    coords = {}
+    for key in all_coords:
+        try:
+            if all_coords[key].axis in ('X', 'Y'):
+                coords[key] = all_coords[key]
+        except AttributeError:
+            pass
+    # arcane magic to put the coordinates in reverse order
+    # because otherwise DataArray expects the transpose of what we have
+    coords = dict(reversed(list(coords.items())))
+    return coords
