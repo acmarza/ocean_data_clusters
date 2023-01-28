@@ -106,6 +106,7 @@ class ClusterMatcher:
         # create venn diagram based on the sets corresponding to the label
         venn = venn2(subsets=[left_set, right_set],
                      set_colors=[label_color, label_color],
+                     set_labels=["", ""],
                      ax=ax)
 
         # use black edges on the venn diagram
