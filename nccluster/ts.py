@@ -94,6 +94,8 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
     def _checkers(self):
         super()._checkers()
         self.__check_n_clusters()
+        self.__check_max_iter()
+        self.__check_n_init()
         self.__check_clustering_method()
         self.__check_scaling_bool()
         self.__check_labels_long_name()
@@ -160,6 +162,22 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
             confirm_msg='[i] Palette for plots: '
         )
 
+    def __check_max_iter(self):
+        self._check_config_option(
+            'timeseries', 'max_iter',
+            required=True,
+            default=10,
+            confirm_msg="[i] Max iterations for clustering algorithm: "
+        )
+
+    def __check_n_init(self):
+        self._check_config_option(
+            'timeseries', 'n_init',
+            required=True,
+            default=10,
+            confirm_msg="[i] Number of initializaitons for clustering: "
+        )
+
     def _fit_model(self, n_clusters=None, dataset=None, quiet=False):
         if n_clusters is None:
             n_clusters = self.config['timeseries'].getint('n_clusters')
@@ -167,7 +185,8 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         # define the keyword arguments to pass to the model
         kwargs = {
             'n_clusters': n_clusters,
-            # 'max_iter': 10,
+            'max_iter': int(self.config['timeseries']['max_iter']),
+            'n_init': int(self.config['timeseries']['n_init']),
             'metric': 'euclidean'
         }
 
