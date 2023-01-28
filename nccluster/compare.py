@@ -224,7 +224,7 @@ class DdR_Histogram:
 
         # get the barycenter of each cluster and subcluster
         # and convert to dR by subtracting surface mean
-        ts = wf._make_ts('local_age')
+        ts = wf._make_ts('R_age')
         self.centers_dict = construct_barycenters(self.labels,
                                                   self.sublabels,
                                                   ts)

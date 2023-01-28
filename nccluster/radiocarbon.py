@@ -24,7 +24,7 @@ class RadioCarbonWorkflow(Workflow):
         if 'dc14' in self._ds.variables:
             self.__check_mean_radiocarbon_lifetime()
             self.__check_atm_dc14()
-            self.__compute_local_age()
+            self.__compute_R_age()
 
     def __construct_rename_dict(self, vars):
         # get the name of each variable as it appears in the dataset
@@ -60,12 +60,12 @@ class RadioCarbonWorkflow(Workflow):
             confirm_msg="[i] Proceeding with atmospheric dc14 = "
         )
 
-    def __compute_local_age(self):
+    def __compute_R_age(self):
         # using mean radiocarbon lifetime, dc14, atm_dc14
         mean_radio_life =\
             self.config['radiocarbon'].getint('mean_radiocarbon_lifetime')
         atm_dc14 = self.config['radiocarbon'].getint('atm_dc14')
-        self._ds.assign(local_age=lambda x: -mean_radio_life*log(
+        self._ds.assign(R_age=lambda x: -mean_radio_life*log(
             (x.dc14/1000 + 1)/(atm_dc14/1000 + 1))
                        )
         print("[i] Converted dc14 to age")
@@ -77,4 +77,4 @@ class RadioCarbonWorkflow(Workflow):
         print("[i] Computed dc14 from di14c and dic")
 
     def _setters(self):
-        self._age_array = self.ds_var_to_array('local_age')
+        self._age_array = self.ds_var_to_array('R_age')

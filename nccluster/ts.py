@@ -64,7 +64,7 @@ class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
 
         fig.show()
 
-    def _make_ts_array(self, var='local_age'):
+    def _make_ts_array(self, var='R_age'):
         # remember shape = (t, z, y, x)
         # we want ts_array.shape = (n, t) at z=0 with n=x*y
         # note the -1 in np.reshape tells it to figure out n on its own
@@ -74,13 +74,13 @@ class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
                               newshape=(ts_array.shape[0], -1)).T
         return ts_array
 
-    def _make_df(self, var='local_age'):
+    def _make_df(self, var='R_age'):
         # convenience function to get time series as dataframe
         ts_array = self._make_ts_array(var)
         df = pd.DataFrame(ts_array)
         return df
 
-    def _make_ts(self, var='local_age'):
+    def _make_ts(self, var='R_age'):
         # convenience function to get a tslearn-formatted time series array
         df = self._make_df(var)
         ts_droppedna_array = np.array(df.dropna())
@@ -568,16 +568,16 @@ class dRWorkflow(TimeSeriesWorkflowBase):
         # restrict analysis to surface
         self._ds.top()
 
-        # define new surface variable, dR = local_age - mean surface age
+        # define new surface variable, dR = R_age - mean surface age
         self.__compute_avgR()
         self.__compute_dR()
 
     def __compute_dR(self):
 
         # compute R-age difference from surface mean
-        self._ds.assign(dR=lambda x: x.local_age - x.avgR)
+        self._ds.assign(dR=lambda x: x.R_age - x.avgR)
 
     def __compute_avgR(self):
 
         # compute mean surface R-age
-        self._ds.assign(avgR=lambda x: spatial_mean(x.local_age))
+        self._ds.assign(avgR=lambda x: spatial_mean(x.R_age))
