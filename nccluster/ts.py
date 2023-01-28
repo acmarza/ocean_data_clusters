@@ -239,6 +239,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         ax = self.fig.add_subplot(122)
         ax.imshow(labels_shaped, origin='lower',
                   cmap=self.config['default']['palette'])
+        ax.set_title(self.config['default']['labels_long_name'])
 
     def _make_labels_shaped(self):
         # get the timeseries as a dataframe and append labels to non-empty rows
@@ -454,6 +455,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         ax = self.fig.add_subplot(122)
         ax.imshow(subclusters_map, origin='lower',
                   cmap=self.config['default']['palette'])
+        ax.set_title(self.config['default']['labels_long_name'])
 
     def _plot_ts_clusters(self):
         sublabels = self.labels2step[:, :, 1]
