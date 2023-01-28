@@ -6,7 +6,7 @@ import xesmf as xe
 from matplotlib.colors import Normalize
 from matplotlib.cm import get_cmap, Greys
 from matplotlib_venn import venn2
-from nccluster.workflows import dRWorkflow
+from nccluster.ts import dRWorkflow
 from nccluster.utils import make_subclusters_map, construct_barycenters
 from numpy.linalg import norm
 from scipy.stats import gaussian_kde
