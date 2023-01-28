@@ -188,7 +188,7 @@ class FclusterViewer(CorrelationMapperBase):
             self.linkage_method_radio_ax,
             ('single', 'complete', 'average', 'weighted', 'centroid',
              'median', 'ward'),
-            active=1
+            active=6
         )
 
         # set the radio button to call this function when clicked
@@ -221,7 +221,7 @@ class FclusterViewer(CorrelationMapperBase):
         self.fcluster_thresh_textbox = TextBox(
             ax=self.fcluster_thresh_textbox_ax,
             label='value:',
-            initial='0.4'
+            initial='5'
         )
 
         # tell the textbox to call this function when new text is submitted
@@ -286,6 +286,9 @@ class FclusterViewer(CorrelationMapperBase):
         # corrections to reduce floating point errors
         dissimilarity = (dissimilarity + dissimilarity.T) / 2
         np.fill_diagonal(dissimilarity, 0)
+
+        # take sqrt of 1 - corr
+        dissimilarity = np.sqrt(dissimilarity)
 
         # dissimilarity matrix needs to be in this form for hierarchical
         # clustering
