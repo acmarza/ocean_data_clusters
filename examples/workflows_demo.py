@@ -3,11 +3,11 @@ import sys
 
 sys.path.append('.')
 
-from nccluster.workflows import KMeansWorkflow
-from nccluster.workflows import CorrelationWorkflow
+from nccluster.correlation import CorrelationWorkflow
+from nccluster.correlation import DendrogramWorkflow
 from nccluster.ts import TimeSeriesClusteringWorkflow
 from nccluster.ts import TwoStepTimeSeriesClusterer
-from nccluster.workflows import DendrogramWorkflow
+from nccluster.workflows import KMeansWorkflow
 
 
 def main():
