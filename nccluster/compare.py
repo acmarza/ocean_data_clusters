@@ -49,9 +49,10 @@ class ClusterMatcher:
 
     def overlap(self):
         try:
-            # 2D array that is True where the left and right maps agree
-            overlap_mask = np.equal(self.labels_left.values,
-                                    self.labels_right.values)
+            # 2D array that is True where the left and right maps disagree
+            overlap_mask = np.not_equal(self.labels_left.values,
+                                        self.labels_right.values)
+            overlap_mask[np.isnan(self.labels_left.values)] = False
         except ValueError:
             print("[!] Can't overlap maps with different sizes! Try regrid.")
 
