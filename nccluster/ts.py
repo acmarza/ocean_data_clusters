@@ -44,23 +44,23 @@ class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
             isbool=True
         )
 
-    def plot_all_ts(self):
+    def plot_all_ts(self, var='R_age'):
         # plot evolution of every grid point over time
         # i.e. plot all the time series on one figure
         # initialise the figure, axis and get the data to plot
         fig = plt.figure()
         ax = fig.add_subplot()
-        ts_array = self._make_ts_array()
+        ts_array = self._make_ts_array(var)
 
         # plot each time series
         for ts in tqdm(ts_array,
                        desc="[i] Plotting combined time series"):
-            ax.plot(range(0, len(ts)), ts)
+            ax.plot(range(0, len(ts)), ts, linewidth='0.2')
 
         # some information
         ax.set_xlabel('time step')
-        ax.set_ylabel('age')
-        ax.set_title('age over time')
+        ax.set_ylabel(var)
+        ax.set_title('R-ages over time')
 
         fig.show()
 
