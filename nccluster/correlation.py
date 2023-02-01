@@ -62,4 +62,4 @@ class DendrogramWorkflow(RadioCarbonWorkflow):
         t, _, y, x = self._age_array.shape
         evolutions = np.reshape(self._age_array[:, 0], [t, x*y]).T
         corr_mat = np.corrcoef(evolutions)
-        DendrogramViewer(corr_mat, (y, x))
+        DendrogramViewer(corr_mat, (y, x), title=self.config_path)

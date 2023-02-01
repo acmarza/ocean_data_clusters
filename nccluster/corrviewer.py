@@ -808,8 +808,10 @@ class CorrelationViewer(MultiSliceViewer, CorrelationMatrixViewer):
 
 class DendrogramViewer(FclusterViewer):
 
-    def __init__(self, corr_mat, map_shape, cmap='rainbow'):
+    def __init__(self, corr_mat, map_shape, cmap='rainbow',
+                 title='Dendrogram'):
         self.fig = plt.figure()
+        self.fig.suptitle(title)
         self.cmap = cmap
         CorrelationMapperBase.__init__(self, corr_mat, map_shape, fig=self.fig)
         self.init_widgets()
