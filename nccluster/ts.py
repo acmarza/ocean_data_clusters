@@ -60,7 +60,7 @@ class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
         # some information
         ax.set_xlabel('time step')
         ax.set_ylabel(var)
-        ax.set_title('R-ages over time')
+        ax.set_title(var + ' over time')
 
         fig.show()
 
