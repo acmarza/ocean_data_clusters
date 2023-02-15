@@ -9,7 +9,7 @@ from matplotlib.cm import get_cmap
 from matplotlib.colors import Normalize
 from nccluster.radiocarbon import RadioCarbonWorkflow
 from nccluster.utils import make_subclusters_map, make_subclust_sizes,\
-    get_sublabel_colorval, make_xy_coords
+    get_sublabel_colorval, subset_coords
 from sklearn.metrics import calinski_harabasz_score, davies_bouldin_score
 from sktime.clustering.k_medoids import TimeSeriesKMedoids
 from tqdm import tqdm
@@ -277,7 +277,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
 
         # get the raw labels array
         labels_shaped = self._make_labels_shaped()
-        coords = make_xy_coords(self._ds)
+        coords = subset_coords(self._ds)
         long_name = self.config['default']['labels_long_name']
         # create the data array from our labels and
         # the x-y coords copied from the original dataset
@@ -517,7 +517,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
     def save_labels(self, filename):
         labels_darray = self._make_labels_data_array(step=0)
         sublabels_darray = self._make_labels_data_array(step=1)
-        coords = make_xy_coords(self._ds)
+        coords = subset_coords(self._ds)
         dataset = xr.Dataset({'labels': labels_darray,
                               'sublabels': sublabels_darray},
                              coords=coords
@@ -546,7 +546,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         # override
         # get the raw labels array
         labels_shaped = self.labels2step[:, :, step]
-        coords = make_xy_coords(self._ds)
+        coords = subset_coords(self._ds)
         option = 'labels_long_name' if step == 0 else 'sublabels_long_name'
         long_name = self.config['default'][option]
         # create the data array from our labels and

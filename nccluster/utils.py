@@ -60,13 +60,15 @@ def construct_barycenters(labels, sublabels, ts):
 
     return centers_dict
 
-def make_xy_coords(ds):
-    # copy the coords of the original dataset, but keep only x and y
+
+def subset_coords(ds, axes=['X', 'Y']):
+    # copy the coords of the original dataset, but keep only specified axes
+    # default x and y only
     all_coords = ds.to_xarray().coords
     coords = {}
     for key in all_coords:
         try:
-            if all_coords[key].axis in ('X', 'Y'):
+            if all_coords[key].axis in axes:
                 coords[key] = all_coords[key]
         except AttributeError:
             pass
