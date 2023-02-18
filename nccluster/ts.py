@@ -331,8 +331,8 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
                     silhouette_score(dataset, labels, metric='euclidean'))
                 ch_scores.append(calinski_harabasz_score(dataset[:, :, 0],
                                                          labels))
-                db_scores.append(davies_bouldin_score(dataset[:, :, 0],
-                                                      labels))
+                db_scores.append(-davies_bouldin_score(dataset[:, :, 0],
+                                                       labels))
 
         kn = KneeLocator(x=n_range,
                          y=inertias,
@@ -341,17 +341,21 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         if not show:
             return kn.knee
 
-        fig, axes = plt.subplots(4, 1)
+        fig, axes = plt.subplots(4, 1, figsize=(5, 10))
         scores = [inertias, sil_scores, ch_scores, db_scores]
-        titles = ['Sum of squared errors, choose elbow point',
-                  'Silhouette Score, higher is better',
-                  'Calinski-Harabasz Index, higher is better',
-                  'Davies-Bouldin Index, lower is better']
-        for (ax, score, title) in zip(axes, scores, titles):
+        y_labels = ['Sum of squared errors',
+                    'Silhouette Score',
+                    'Calinski-Harabasz Index',
+                    'Davies-Bouldin Index\n(flipped)']
+        for (ax, score, label) in zip(axes, scores, y_labels):
             ax.plot(n_range, score)
-            ax.set_title(title)
-        axes[0].axvline(kn.knee)
+            ax.set_ylabel(label)
 
+        axes[0].axvline(kn.knee)
+        axes[-1].set_xlabel("number of clusters, K")
+        fig.suptitle("Clustering metrics summary")
+
+        plt.tight_layout()
         plt.show()
 
         return kn.knee
