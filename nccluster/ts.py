@@ -211,6 +211,10 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         # actually fit the model
         self.model.fit(dataset)
 
+        # reorder labels for consistent results
+        self.model.labels_ = reorder_labels(self.model.labels_,
+                                            self._make_ts_array())
+
     def __make_dataset(self):
         dataset = self.ts
 
@@ -414,8 +418,6 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
 
             # get the labels for current subcluster
             sublabels = self._make_labels_shaped()
-            ts_array = self._make_ts_array()
-            sublabels = reorder_labels(sublabels, ts_array)
 
             # for every grid point that is not nan
             for arg in np.argwhere(~np.isnan(sublabels)):

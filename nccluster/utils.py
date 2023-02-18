@@ -82,6 +82,10 @@ def reorder_labels(labels, ts_array):
     # prepare an empty array to hold the average variance of each cluster
     n_clusters = int(np.nanmax(labels) + 1)
     order_scores = np.zeros(n_clusters)
+    if len(ts_array) > len(labels.flatten()):
+        # drop nan-only rows
+        mask = np.all(np.isnan(ts_array), axis=1)
+        ts_array = ts_array[~mask]
     for label in range(0, n_clusters):
         # assume at this point self.mask is still set for this cluster
         # so can grab the timeseries array right away
