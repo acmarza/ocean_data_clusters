@@ -60,6 +60,7 @@ def construct_barycenters(labels, sublabels, ts):
 
     return centers_dict
 
+
 def make_xy_coords(ds):
     # copy the coords of the original dataset, but keep only x and y
     all_coords = ds.to_xarray().coords
@@ -74,3 +75,31 @@ def make_xy_coords(ds):
     # because otherwise DataArray expects the transpose of what we have
     coords = dict(reversed(list(coords.items())))
     return coords
+
+
+def reorder_labels(labels, ts_array):
+
+    # prepare an empty array to hold the average variance of each cluster
+    n_clusters = int(np.nanmax(labels) + 1)
+    order_scores = np.zeros(n_clusters)
+    for label in range(0, n_clusters):
+        # assume at this point self.mask is still set for this cluster
+        # so can grab the timeseries array right away
+        # and zip it with the labels
+
+        # the zip above lets us this neat list comprehension
+        # to retrieve just the time series with the current label
+        all_tss_labeled = zip(ts_array, labels.flatten())
+        cluster_tss = [ts for (ts, ll) in all_tss_labeled if ll == label]
+
+        order_scores[label] = np.mean(np.array(cluster_tss))
+
+    idx = np.argsort(order_scores)
+    orig = np.arange(n_clusters)
+    mapping = dict(zip(idx, orig))
+
+    ordered_labels = np.copy(labels)
+    for key in mapping:
+        ordered_labels[labels == key] = mapping[key]
+
+    return ordered_labels

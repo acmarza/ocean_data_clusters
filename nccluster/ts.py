@@ -9,7 +9,7 @@ from matplotlib.cm import get_cmap
 from matplotlib.colors import Normalize
 from nccluster.radiocarbon import RadioCarbonWorkflow
 from nccluster.utils import make_subclusters_map, make_subclust_sizes,\
-    get_sublabel_colorval, make_xy_coords
+    get_sublabel_colorval, make_xy_coords, reorder_labels
 from sklearn.metrics import calinski_harabasz_score, davies_bouldin_score
 from sktime.clustering.k_medoids import TimeSeriesKMedoids
 from tqdm import tqdm
@@ -415,7 +415,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
             # get the labels for current subcluster
             sublabels = self._make_labels_shaped()
             ts_array = self._make_ts_array()
-            sublabels = self.__reorder_sublabels(sublabels, ts_array)
+            sublabels = reorder_labels(sublabels, ts_array)
 
             # for every grid point that is not nan
             for arg in np.argwhere(~np.isnan(sublabels)):
@@ -444,33 +444,6 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         self.mask = cluster_mask
         # re-buld the time series dataset (now restricted to this cluster)
         self._set_ts()
-
-    def __reorder_sublabels(self, labels, ts_array):
-
-        # prepare an empty array to hold the average variance of each cluster
-        n_clusters = int(np.nanmax(labels) + 1)
-        order_scores = np.zeros(n_clusters)
-        for label in range(0, n_clusters):
-            # assume at this point self.mask is still set for this cluster
-            # so can grab the timeseries array right away
-            # and zip it with the labels
-
-            # the zip above lets us this neat list comprehension
-            # to retrieve just the time series with the current label
-            all_tss_labeled = zip(ts_array, labels.flatten())
-            cluster_tss = [ts for (ts, ll) in all_tss_labeled if ll == label]
-
-            order_scores[label] = np.mean(np.array(cluster_tss))
-
-        idx = np.argsort(order_scores)
-        orig = np.arange(n_clusters)
-        mapping = dict(zip(idx, orig))
-
-        ordered_labels = np.copy(labels)
-        for key in mapping:
-            ordered_labels[labels == key] = mapping[key]
-
-        return ordered_labels
 
     def _map_clusters(self):
         # override parent method
