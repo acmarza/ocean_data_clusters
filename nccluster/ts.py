@@ -414,7 +414,8 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
 
             # get the labels for current subcluster
             sublabels = self._make_labels_shaped()
-            sublabels = self.__reorder_sublabels(sublabels)
+            ts_array = self._make_ts_array()
+            sublabels = self.__reorder_sublabels(sublabels, ts_array)
 
             # for every grid point that is not nan
             for arg in np.argwhere(~np.isnan(sublabels)):
@@ -444,7 +445,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         # re-buld the time series dataset (now restricted to this cluster)
         self._set_ts()
 
-    def __reorder_sublabels(self, labels):
+    def __reorder_sublabels(self, labels, ts_array):
 
         # prepare an empty array to hold the average variance of each cluster
         n_clusters = int(np.nanmax(labels) + 1)
@@ -453,13 +454,13 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
             # assume at this point self.mask is still set for this cluster
             # so can grab the timeseries array right away
             # and zip it with the labels
-            cluster_tss = zip(self._make_ts_array(), labels.flatten())
 
             # the zip above lets us this neat list comprehension
             # to retrieve just the time series with the current label
-            subcluster_tss = [ts for (ts, ll) in cluster_tss if ll == label]
+            all_tss_labeled = zip(ts_array, labels.flatten())
+            cluster_tss = [ts for (ts, ll) in all_tss_labeled if ll == label]
 
-            order_scores[label] = np.mean(np.array(subcluster_tss))
+            order_scores[label] = np.mean(np.array(cluster_tss))
 
         idx = np.argsort(order_scores)
         orig = np.arange(n_clusters)
