@@ -237,6 +237,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         # get predictions for our time series from trained model
         # i.e. to which cluster each time series belongs
         labels = self.model.labels_
+        n_times = len(self._ds.times)
         n_clusters = self.model.n_clusters
         norm = Normalize(vmin=0, vmax=n_clusters-1)
         cmap = get_cmap(self.config['default']['palette'])
@@ -245,6 +246,8 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
             # create a subplot in a table with n_cluster rows and 1 column
             # this subplot is number label+1 because we're counting from 0
             ax = self.fig.add_subplot(n_clusters, 2, 2 * label + 1)
+            if label == 0:
+                ax.set_title("Cluster R-age histories")
             color = cmap(norm(label))
             # for every time series that has been assigned this label
             cluster_tss = self.ts[labels == label]
@@ -253,6 +256,11 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
                 ax.plot(ts.ravel(), color=color, alpha=.2)
             # plot the cluster barycenter
             ax.plot(euclidean_barycenter(cluster_tss).ravel(), "k-")
+            ax.set_xticks([])
+            ax.set_ylabel("R-age (yrs)")
+
+        ax.set_xlabel('time step')
+        ax.set_xticks(range(0, n_times))
 
     def _map_clusters(self):
         # get the 2D labels array
