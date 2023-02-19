@@ -5,6 +5,7 @@ sys.path.append('.')
 
 from nccluster.correlation import CorrelationWorkflow
 from nccluster.correlation import DendrogramWorkflow
+from nccluster.ts import TimeSeriesWorkflowBase
 from nccluster.ts import TimeSeriesClusteringWorkflow
 from nccluster.ts import TwoStepTimeSeriesClusterer
 from nccluster.workflows import KMeansWorkflow
@@ -31,10 +32,12 @@ def main():
         wf = KMeansWorkflow(args.config)
     elif args.method == 'ts':
         wf = TimeSeriesClusteringWorkflow(args.config)
+    elif args.method == 'all_ts':
+        wf = TimeSeriesWorkflowBase(args.config)
     elif args.method == 'metrics':
         wf = TimeSeriesClusteringWorkflow(args.config)
         wf.clustering_metrics()
-        exit()
+        return
     elif args.method == 'corr':
         wf = CorrelationWorkflow(args.config)
     elif args.method == 'two':
