@@ -96,8 +96,6 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         self._set_ts()
 
     def run(self):
-        # run the parent workflow (plotting all time series)
-        TimeSeriesWorkflowBase.run(self)
 
         # get the model with label assignments and barycenters
         self.cluster()
