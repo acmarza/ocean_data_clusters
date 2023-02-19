@@ -243,6 +243,9 @@ class FclusterViewer(CorrelationMapperBase):
             cmap=self.cmap
         )
 
+        self.cluster_ax.set_xticks([])
+        self.cluster_ax.set_yticks([])
+
     def make_df(self):
         return pd.DataFrame(self.corr_mat, index=None, columns=None)
 
@@ -832,6 +835,8 @@ class DendrogramViewer(FclusterViewer):
         # a gridspec (see CorrelationViewer) to override parent layout
         # would be preferable
         self.dendro_ax = self.fig.add_subplot(122)
+        self.dendro_cid = self.fig.canvas.mpl_connect("button_press_event",
+                                                      self.dendro_ax_on_click)
 
     def update_plots(self):
         hierarchy, labels_shaped = self.corr_cluster()
@@ -855,3 +860,11 @@ class DendrogramViewer(FclusterViewer):
                                  no_labels=True,
                                  ax=self.dendro_ax)
         self.dendro_ax.axhline(y=self.fcluster_thresh)
+
+    def dendro_ax_on_click(self, event):
+        if not event.inaxes == self.dendro_ax:
+            return
+        thresh = round(event.ydata, 3)
+        self.fcluster_thresh = thresh
+        self.fcluster_thresh_textbox.set_val(thresh)
+        self.update_plots()
