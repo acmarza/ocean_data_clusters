@@ -180,7 +180,7 @@ class FclusterViewer(CorrelationMapperBase):
     def init_linkage_method_radio_ax(self):
         # radio buttons for changing clustering method
         # create a new ax and set its title
-        self.linkage_method_radio_ax = self.fig.add_subplot(269)
+        self.linkage_method_radio_ax = self.fig.add_subplot(331)
         self.linkage_method_radio_ax.set_title('Linkage method')
 
         # create the radio button with predefined labels
@@ -198,7 +198,7 @@ class FclusterViewer(CorrelationMapperBase):
 
     def init_fcluster_criterion_radio_ax(self):
         # see init_linkage_method_radio_ax comments
-        self.fcluster_criterion_radio_ax = self.fig.add_subplot(268)
+        self.fcluster_criterion_radio_ax = self.fig.add_subplot(334)
         self.fcluster_criterion_radio_ax.set_title('Fcluster criterion')
 
         self.fcluster_criterion_radio = RadioButtons(
@@ -214,7 +214,7 @@ class FclusterViewer(CorrelationMapperBase):
 
     def init_fcluster_thresh_textbox_ax(self):
         # create an ax and give it a title
-        self.fcluster_thresh_textbox_ax = self.fig.add_subplot(267)
+        self.fcluster_thresh_textbox_ax = self.fig.add_subplot(337)
         self.fcluster_thresh_textbox_ax.set_title("Fcluster threshold")
 
         # create the textbox giving it an initial value
@@ -231,7 +231,7 @@ class FclusterViewer(CorrelationMapperBase):
 
     def init_cluster_ax(self):
         # create new ax for the cluster map
-        self.cluster_ax = self.fig.add_subplot(221)
+        self.cluster_ax = self.fig.add_subplot(222)
 
         # run correlation clustering to get the 2D array of labels
         _, labels_shaped = self.corr_cluster()
@@ -834,7 +834,7 @@ class DendrogramViewer(FclusterViewer):
         # i'm cheating and hardcoded the parent class to work with this layout
         # a gridspec (see CorrelationViewer) to override parent layout
         # would be preferable
-        self.dendro_ax = self.fig.add_subplot(122)
+        self.dendro_ax = self.fig.add_subplot(224)
         self.dendro_cid = self.fig.canvas.mpl_connect("button_press_event",
                                                       self.dendro_ax_on_click)
 
@@ -860,6 +860,7 @@ class DendrogramViewer(FclusterViewer):
                                  no_labels=True,
                                  ax=self.dendro_ax)
         self.dendro_ax.axhline(y=self.fcluster_thresh)
+        self.dendro_ax.set_ylabel("cophenetic distance")
 
     def dendro_ax_on_click(self, event):
         if not event.inaxes == self.dendro_ax:
