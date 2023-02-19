@@ -23,28 +23,16 @@ class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
     '''Base class for workflows involving time series.'''
     def _checkers(self):
         super()._checkers()
-        self.__check_plot_all_ts_bool()
 
     def _setters(self):
         super()._setters()
         self.mask = None
 
     def run(self):
-        # this base class simply plots all the time series if asked to
-        if self.config['timeseries'].getboolean('plot_all_ts'):
-            self.plot_all_ts()
+        self.plot_all_ts(ylabel="R-age (yrs)")
+        plt.show()
 
-    def __check_plot_all_ts_bool(self):
-        missing_msg = '[!] You have not specified whether to show\
- a plot of all the R-age time series'
-        self._check_config_option(
-            'timeseries', 'plot_all_ts', missing_msg=missing_msg,
-            input_msg='[>] Show a plot of all the R-age time series? (y/n): ',
-            confirm_msg='[i] Plot all time series bool: ',
-            isbool=True
-        )
-
-    def plot_all_ts(self, var='R_age'):
+    def plot_all_ts(self, var='R_age', ylabel=None):
         # plot evolution of every grid point over time
         # i.e. plot all the time series on one figure
         # initialise the figure, axis and get the data to plot
@@ -59,8 +47,10 @@ class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
 
         # some information
         ax.set_xlabel('time step')
-        ax.set_ylabel(var)
-        ax.set_title(var + ' over time')
+        if not ylabel:
+            ylabel = var
+        ax.set_ylabel(ylabel)
+        ax.set_title(ylabel + ' over time')
 
         fig.show()
 
@@ -267,7 +257,6 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
                 ax.set_xticks([])
             else:
                 ax.set_xlabel('time step')
-
 
     def _map_clusters(self):
         print("[i] Mapping out clusters")
