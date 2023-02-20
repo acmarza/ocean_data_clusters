@@ -24,7 +24,7 @@ def main():
     else:
         print(f"[!] Unrecognised option {args.method}")
 
-    wf.cluster()
+    wf.run()
     wf.save_labels(args.file)
 
 
