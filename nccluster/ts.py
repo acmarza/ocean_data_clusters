@@ -105,6 +105,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
 
     def cluster(self):
         self._fit_model()
+        self.labels = self._make_labels_shaped()
 
     def _set_ts(self, mask=None):
         # wrapper for setting the time series attribute of this class
@@ -225,8 +226,10 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         # get predictions for our time series from trained model
         # i.e. to which cluster each time series belongs
         print("[i] Plotting time series by cluster")
-        labels = self.model.labels_
-        n_clusters = self.model.n_clusters
+        labels = self.labels.flatten()
+        labels = labels[~np.isnan(labels)]
+
+        n_clusters = int(np.nanmax(labels) + 1)
         norm = Normalize(vmin=0, vmax=n_clusters-1)
         cmap = get_cmap(self.config['default']['palette'])
         # for each cluster/label
@@ -259,14 +262,11 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
     def _map_clusters(self):
         print("[i] Mapping out clusters")
 
-        # get the 2D labels array
-        labels_shaped = self._make_labels_shaped()
-
         # view the clusters on a map
         ax = self.fig.add_subplot(222)
         ax.set_xticks([])
         ax.set_yticks([])
-        ax.imshow(labels_shaped, origin='lower',
+        ax.imshow(self.labels, origin='lower',
                   cmap=self.config['default']['palette'])
         ax.set_title(self.config['default']['labels_long_name'])
 
@@ -369,6 +369,12 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         plt.show()
 
         return kn.knee
+
+    def load_model_labels_from_file(self, filename):
+        print("[i] Loading labels from " + filename)
+        labels_data_arr = xr.open_dataarray(filename)
+        labels_shaped = labels_data_arr.values
+        self.labels = labels_shaped
 
 
 class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
