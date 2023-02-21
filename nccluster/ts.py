@@ -217,7 +217,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
 
     def view_results(self):
         self.fig = plt.figure()
-        plt.rcParams['figure.constrained_layout.use'] = True
+        # plt.rcParams['figure.constrained_layout.use'] = True
         self._plot_ts_clusters()
         self._map_clusters()
         plt.show()
@@ -232,10 +232,14 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         n_clusters = int(np.nanmax(labels) + 1)
         norm = Normalize(vmin=0, vmax=n_clusters-1)
         cmap = get_cmap(self.config['default']['palette'])
+
         # for each cluster/label
         combined_ax = self.fig.add_subplot(2, 2, 4)
         combined_ax.set_title("Combined R-age histories")
         combined_ax.set_xlabel("time step")
+        combined_ax.yaxis.set_label_position("right")
+        combined_ax.yaxis.tick_right()
+
         for label in range(0, n_clusters):
             # create a subplot in a table with n_cluster rows and 1 column
             # this subplot is number label+1 because we're counting from 0
@@ -258,6 +262,13 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
                 ax.set_xticks([])
             else:
                 ax.set_xlabel('time step')
+
+            # put the cluster number on the right of the current ax
+            ax.text(1.05, 0.5, n_clusters - label,
+                horizontalalignment='center',
+                verticalalignment='center',
+                rotation='horizontal',
+                transform=ax.transAxes)
 
     def _map_clusters(self):
         print("[i] Mapping out clusters")
