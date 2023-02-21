@@ -11,6 +11,12 @@ def main():
                         help='the first .nc file containing cluster labels')
     parser.add_argument('-r', '--right',
                         help='the second .nc file containing cluster labels')
+    parser.add_argument('-m', '--match', default=True,
+                        action=argparse.BooleanOptionalAction,
+                        help='whether to attempt cluster matching')
+    parser.add_argument('-g', '--regrid', default=True,
+                        action=argparse.BooleanOptionalAction,
+                        help='whether to regrid the left set of labels')
     args = parser.parse_args()
 
     # initialise the matcher and load in the labels
@@ -20,13 +26,15 @@ def main():
     # first look at labels
     matcher.compare_maps()
 
-    # regrid labels to same coords and view results
-    matcher.regrid_left_to_right()
-    matcher.compare_maps()
+    if args.regrid:
+        # regrid labels to same coords and view results
+        matcher.regrid_left_to_right()
+        matcher.compare_maps()
 
-    # harmonise colors and view results
-    matcher.match_labels()
-    matcher.compare_maps()
+    if args.match:
+        # harmonise colors and view results
+        matcher.match_labels()
+        matcher.compare_maps()
 
     matcher.overlap()
 
