@@ -134,9 +134,9 @@ class TimeSeriesClusteringWorkflow(dRWorkflow):
         self._fit_model()
         self.labels = self._make_labels_shaped()
 
-    def _set_ts(self, var=None):
+    def _set_ts(self):
         # wrapper for setting the time series attribute of this class
-        self.ts = self._make_ts(var=var)
+        self.ts = self._make_ts(var=self.config['timeseries']['cluster_on'])
 
     def __check_n_clusters(self):
         self._check_config_option(
@@ -267,10 +267,12 @@ class TimeSeriesClusteringWorkflow(dRWorkflow):
         n_clusters = int(np.nanmax(labels) + 1)
         norm = Normalize(vmin=0, vmax=n_clusters-1)
         cmap = get_cmap(self.config['default']['palette'])
+        var = self.config['timeseries']['cluster_on']
+        var = var.replace('_', '-')
 
         # for each cluster/label
         combined_ax = self.fig.add_subplot(2, 2, 4)
-        combined_ax.set_title("Combined R-age histories")
+        combined_ax.set_title(f"Combined {var} histories")
         combined_ax.set_xlabel("time step")
         combined_ax.yaxis.set_label_position("right")
         combined_ax.yaxis.tick_right()
@@ -281,8 +283,8 @@ class TimeSeriesClusteringWorkflow(dRWorkflow):
             ax = self.fig.add_subplot(n_clusters, 2,
                                       2 * n_clusters - 2 * label - 1)
             if label == n_clusters - 1:
-                ax.set_title("Cluster R-age histories")
-                ax.set_ylabel("R-age (yrs)")
+                ax.set_title(f"Cluster {var} histories")
+                ax.set_ylabel(f"{var} (yrs)")
             color = cmap(norm(label))
             # for every time series that has been assigned this label
             cluster_tss = self.ts[labels == label]
