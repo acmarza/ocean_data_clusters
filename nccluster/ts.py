@@ -70,8 +70,10 @@ class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
         df = pd.DataFrame(ts_array)
         return df
 
-    def _make_ts(self, var='R_age'):
+    def _make_ts(self, var=None):
         # convenience function to get a tslearn-formatted time series array
+        if var is None:
+            var = 'R_age'
         df = self._make_df(var)
         ts_droppedna_array = np.array(df.dropna())
         ts = to_time_series_dataset(ts_droppedna_array)
@@ -90,6 +92,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         self.__check_scaling_bool()
         self.__check_labels_long_name()
         self.__check_palette()
+        self.__check_cluster_on()
 
     def _setters(self):
         super()._setters()
@@ -107,9 +110,9 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         self._fit_model()
         self.labels = self._make_labels_shaped()
 
-    def _set_ts(self, mask=None):
+    def _set_ts(self, var=None):
         # wrapper for setting the time series attribute of this class
-        self.ts = self._make_ts()
+        self.ts = self._make_ts(var=var)
 
     def __check_n_clusters(self):
         self._check_config_option(
@@ -165,6 +168,14 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
             required=True,
             default=10,
             confirm_msg="[i] Number of initializaitons for clustering: "
+        )
+
+    def __check_cluster_on(self):
+        self._check_config_option(
+            'timeseries', 'cluster_on',
+            required=True,
+            default='R_age',
+            confirm_msg='[i] Clustering on variable: '
         )
 
     def _fit_model(self, n_clusters=None, dataset=None, quiet=False):
