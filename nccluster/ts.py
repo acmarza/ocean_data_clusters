@@ -80,7 +80,31 @@ class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
         return ts
 
 
-class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
+class dRWorkflow(TimeSeriesWorkflowBase):
+
+    def _preprocess_ds(self):
+        # compute local age from radiocarbon
+        super()._preprocess_ds()
+
+        # restrict analysis to surface
+        self._ds.top()
+
+        # define new surface variable, dR = R_age - mean surface age
+        self.__compute_avgR()
+        self.__compute_dR()
+
+    def __compute_dR(self):
+
+        # compute R-age difference from surface mean
+        self._ds.assign(dR=lambda x: x.R_age - x.avgR)
+
+    def __compute_avgR(self):
+
+        # compute mean surface R-age
+        self._ds.assign(avgR=lambda x: spatial_mean(x.R_age))
+
+
+class TimeSeriesClusteringWorkflow(dRWorkflow):
     '''A workflow to find clusters in the surface ocean based on the
     radiocarbon age time series at each grid point.'''
     def _checkers(self):
@@ -571,27 +595,3 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
                                   attrs={'long_name': long_name}
                                   )
         return data_array
-
-
-class dRWorkflow(TimeSeriesWorkflowBase):
-
-    def _preprocess_ds(self):
-        # compute local age from radiocarbon
-        super()._preprocess_ds()
-
-        # restrict analysis to surface
-        self._ds.top()
-
-        # define new surface variable, dR = R_age - mean surface age
-        self.__compute_avgR()
-        self.__compute_dR()
-
-    def __compute_dR(self):
-
-        # compute R-age difference from surface mean
-        self._ds.assign(dR=lambda x: x.R_age - x.avgR)
-
-    def __compute_avgR(self):
-
-        # compute mean surface R-age
-        self._ds.assign(avgR=lambda x: spatial_mean(x.R_age))
