@@ -53,6 +53,7 @@ class ClusterMatcher:
             overlap_mask = np.not_equal(self.labels_left.values,
                                         self.labels_right.values)
             overlap_mask[np.isnan(self.labels_left.values)] = False
+            overlap_mask[np.isnan(self.labels_right.values)] = False
         except ValueError:
             print("[!] Can't overlap maps with different sizes! Try regrid.")
 
@@ -86,7 +87,8 @@ class ClusterMatcher:
         n_notnan = notnan.size
         overlap = int(n_equal) / n_notnan
         title = f'Total label overlap: {overlap:.0%}'
-        plt.suptitle(title)
+        plt.suptitle(title, fontsize='14')
+
         self.left_map.set_title(self.labels_left.long_name)
         self.right_map.set_title(self.labels_right.long_name)
 
@@ -103,12 +105,19 @@ class ClusterMatcher:
         left_set = set(idx)
         (idx,) = np.where(self.labels_right.values.flatten() == label)
         right_set = set(idx)
-
+        total = len(right_set.union(left_set))
         # create venn diagram based on the sets corresponding to the label
         venn = venn2(subsets=[left_set, right_set],
+                     subset_label_formatter=lambda x: f"{(x/total):1.0%}",
                      set_colors=[label_color, label_color],
                      set_labels=["", ""],
                      ax=ax)
+        # number the plot
+        ax.text(0.5, 0, int(label+1),
+                horizontalalignment='center',
+                verticalalignment='center',
+                rotation='horizontal',
+                transform=ax.transAxes)
 
         # use black edges on the venn diagram
         try:
