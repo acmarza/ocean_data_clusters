@@ -4,7 +4,7 @@ import sys
 sys.path.append('.')
 
 from nccluster.ts import TimeSeriesClusteringWorkflow
-# from nccluster.ts import TwoStepTimeSeriesClusterer
+from nccluster.ts import TwoStepTimeSeriesClusterer
 
 
 def main():
@@ -19,12 +19,12 @@ def main():
     args = parser.parse_args()
     if args.method == 'ts':
         wf = TimeSeriesClusteringWorkflow(args.config)
-    # elif args.method == 'two':
-    #    wf = TwoStepTimeSeriesClusterer(args.config)
+    elif args.method == 'two':
+        wf = TwoStepTimeSeriesClusterer(args.config)
     else:
         print(f"[!] Unrecognised option {args.method}")
 
-    wf.load_model_labels_from_file(args.file)
+    wf.load_labels_from_file(args.file)
     wf.view_results()
 
 

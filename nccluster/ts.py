@@ -265,10 +265,10 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
 
             # put the cluster number on the right of the current ax
             ax.text(1.05, 0.5, n_clusters - label,
-                horizontalalignment='center',
-                verticalalignment='center',
-                rotation='horizontal',
-                transform=ax.transAxes)
+                    horizontalalignment='center',
+                    verticalalignment='center',
+                    rotation='horizontal',
+                    transform=ax.transAxes)
 
     def _map_clusters(self):
         print("[i] Mapping out clusters")
@@ -381,7 +381,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
 
         return kn.knee
 
-    def load_model_labels_from_file(self, filename):
+    def load_labels_from_file(self, filename):
         print("[i] Loading labels from " + filename)
         labels_data_arr = xr.open_dataarray(filename)
         labels_shaped = labels_data_arr.values
@@ -393,6 +393,8 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
     def _setters(self):
         super()._setters()
         self.centroids_dict = {}
+        t, z, y, x = self._age_array.shape
+        self.labels2step = np.zeros((y, x, 2))
 
     def run(self):
         print("[i] This workflow will override the config setting for scaling")
@@ -474,10 +476,12 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         # override parent method
         subclusters_map = make_subclusters_map(self.labels2step[:, :, 0],
                                                self.labels2step[:, :, 1])
-        ax = self.fig.add_subplot(122)
+        ax = self.fig.add_subplot(222)
         ax.imshow(subclusters_map, origin='lower',
                   cmap=self.config['default']['palette'])
         ax.set_title(self.config['default']['labels_long_name'])
+        ax.set_xticks([])
+        ax.set_yticks([])
 
     def _plot_ts_clusters(self):
         sublabels = self.labels2step[:, :, 1]
@@ -494,10 +498,24 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         cmap = get_cmap(self.config['default']['palette'])
 
         # for each cluster/label
+        combined_ax = self.fig.add_subplot(224)
+        combined_ax.set_title("Combined R-age histories")
+        combined_ax.set_xlabel("time step")
+        combined_ax.yaxis.set_label_position("right")
+        combined_ax.yaxis.tick_right()
+
+        # for each cluster/label
         for label in range(n_clusters):
             # create a subplot in a table with n_cluster rows and 1 column
             # this subplot is number label+1 because we're counting from 0
-            ax = self.fig.add_subplot(n_clusters, 2, 2 * label + 1)
+            ax = self.fig.add_subplot(n_clusters, 2,
+                                      2 * (n_clusters - label) - 1)
+
+            if label == n_clusters - 1:
+                ax.set_title("Cluster R-age histories")
+                ax.set_ylabel("R-age (yrs)")
+            if label == 0:
+                ax.set_xlabel('time step')
 
             barycenters = []
             subclust_size = subclust_sizes[label]
@@ -511,11 +529,20 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
                 subcluster_tss = self.ts[label_match & sublabel_match]
                 for ts in subcluster_tss:
                     ax.plot(ts.ravel(), color=color)
+                    combined_ax.plot(ts.ravel(), color=color, alpha=.1,
+                                        linewidth=0.2)
                 barycenter = euclidean_barycenter(subcluster_tss)
                 barycenters.append(barycenter)
             # need to plot these last else they'd be covered by subcluster ts
             for barycenter in barycenters:
                 ax.plot(barycenter.ravel(), color='black', linewidth=0.5)
+
+            # put the cluster number on the right of the current ax
+            ax.text(1.05, 0.5, n_clusters - label,
+                    horizontalalignment='center',
+                    verticalalignment='center',
+                    rotation='horizontal',
+                    transform=ax.transAxes)
 
     def save_labels(self, filename):
         labels_darray = self._make_labels_data_array(step=0)
@@ -528,6 +555,13 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
 
         dataset.to_netcdf(filename)
         print(f"[i] Saved labels and sublabels to {filename}")
+
+    def load_labels_from_file(self, filename):
+
+        # load in the subcluster assignments
+        labels_ds = xr.load_dataset(filename)
+        self.labels2step[:, :, 0] = labels_ds['labels'].values
+        self.labels2step[:, :, 1] = labels_ds['sublabels'].values
 
     def save_centroids(self, filename):
         # bug: does not match reordered labeld
