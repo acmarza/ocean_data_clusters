@@ -7,8 +7,7 @@ from matplotlib.colors import Normalize
 from matplotlib.cm import get_cmap, Greys
 from matplotlib_venn import venn2
 from nccluster.ts import dRWorkflow
-from nccluster.utils import make_subclusters_map, construct_barycenters,\
-    construct_medoids
+from nccluster.utils import make_subclusters_map, construct_medoids
 from numpy.linalg import norm
 from scipy.stats import gaussian_kde
 
@@ -227,18 +226,20 @@ class DdR_Histogram:
 
         # subtract surface mean R-age from centers to get their dRs
         avgR = wf.ds_var_to_array('avgR')
+        avgR = np.moveaxis(avgR, 0, -1)
 
         # shorthand for frequently used arrays
         self.dR = wf.ds_var_to_array('dR')[:, 0, :, :]
+        self.avg_dR = np.nanmean(self.dR, axis=(1, 2))
         self.labels = labels_ds.to_xarray()['labels'].values
         self.sublabels = labels_ds.to_xarray()['sublabels'].values
 
         # get the barycenter of each cluster and subcluster
         # and convert to dR by subtracting surface mean
-        ts = wf._make_ts('R_age')
+        ts_array = wf.ds_var_to_array('R_age')[:, 0]
         self.centers_dict = construct_medoids(self.labels,
-                                                  self.sublabels,
-                                                  ts)
+                                              self.sublabels,
+                                              ts_array)
         self.centers_dict['clusters'] -= avgR
         for label in range(int(np.nanmax(self.labels) + 1)):
             self.centers_dict['subclusters'][label] -= avgR
@@ -294,7 +295,7 @@ class DdR_Histogram:
 
         # column vectors
         A = subclust_tss
-        B = subclust_center[:, 0]
+        B = subclust_center
 
         # for each subcluster member, compute cosine similarity to center
         cosines = np.dot(A, B)/(norm(A, axis=1)*norm(B))
@@ -365,47 +366,39 @@ class DdR_Histogram:
         # update figure
         self.fig.canvas.draw()
 
+    def to_density_function(self, data, benchmark):
+        t, y, x = data.shape
+        diff = data - benchmark.reshape(t, 1, 1).repeat(y, 1).repeat(x, 2)
+        diff_not_masked = diff[~diff.mask]
+        diff_abs = np.abs(diff_not_masked)
+        diff_notnan = diff_abs[~np.isnan(diff_abs)]
+        density = gaussian_kde(diff_notnan)
+
+        return density
+
     def __density_plots(self, mask, cluster_center, subclust_center):
 
+        # clear the time series plot
+        self.ts_ax.cla()
+
+        # get a handle on array shapes
         t, y, x = self.dR.shape
 
-        # repeat the condition for every time slice
+        # repeat the masking condition for every time slice
         mask = np.repeat(np.array([mask]), repeats=t, axis=0)
 
         # mask dR array to show current subcluster
         intrasub = np.ma.masked_where(mask, self.dR)
-
-        # remove previous overlay
-        # try:
-        #    for handle in self.subclust_overlay.collections:
-        #        handle.remove()
-        # except AttributeError:
-        #    pass
-
-        # color in the clicked subcluster
-        # self.subclust_overlay = self.map_ax.contourf(
-        #    ~np.isnan(intrasub[self.time]))
-
-        # clear the time series plot
-        self.ts_ax.cla()
 
         # plot time series for each subcluster member
         subclust_tss = intrasub[~intrasub.mask]
         for ts in np.reshape(subclust_tss, (t, -1)).T:
             self.ts_ax.plot(ts, color='grey')
 
+        # plot the benchmarks
         subclust_line, = self.ts_ax.plot(subclust_center)
-
-        # extract and plot the cluster center
         cluster_line, = self.ts_ax.plot(cluster_center)
-
-        # compute and plot global mean dR over time
-        # note to self the computation could be moved to init
-        avg_dR = np.nanmean(self.dR, axis=(1, 2))
-        avg_line, = self.ts_ax.plot(avg_dR)
-
-        # consistent y range
-        self.ts_ax.set_ylim([-1500, 1500])
+        avg_line, = self.ts_ax.plot(self.avg_dR)
 
         # add labels
         self.ts_ax.legend([subclust_line, cluster_line, avg_line],
@@ -413,17 +406,15 @@ class DdR_Histogram:
                            'cluster center dR',
                            'surface mean dR'])
 
-        DdR_subclust_center, DdR_clust_center, DdR_global_avg = list(map(
-            lambda benchmark:
-            intrasub - benchmark.reshape(t, 1, 1).repeat(y, 1).repeat(x, 2),
-            [subclust_center, cluster_center, avg_dR]
-        ))
+        # time series to compare subcluster time series to
+        benchmarks = [subclust_center, cluster_center, self.avg_dR]
+        print(subclust_center)
 
-        # drop NaNs, take absolute value, compute densities and plot
-        densities = list(map(
-            lambda arr: gaussian_kde(np.abs(arr[~arr.mask].flatten())),
-            [DdR_subclust_center, DdR_clust_center, DdR_global_avg]
-        ))
+        # get the density functions of the differences between
+        # subcluster members and benchmarks
+        densities = [self.to_density_function(intrasub, benchmark)
+                     for benchmark in benchmarks]
+
         span = range(0, 750)
         self.hist_ax.cla()
         for dens in densities:
