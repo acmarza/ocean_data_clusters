@@ -7,7 +7,8 @@ from matplotlib.colors import Normalize
 from matplotlib.cm import get_cmap, Greys
 from matplotlib_venn import venn2
 from nccluster.ts import dRWorkflow
-from nccluster.utils import make_subclusters_map, construct_barycenters
+from nccluster.utils import make_subclusters_map, construct_barycenters,\
+    construct_medoids
 from numpy.linalg import norm
 from scipy.stats import gaussian_kde
 
@@ -235,7 +236,7 @@ class DdR_Histogram:
         # get the barycenter of each cluster and subcluster
         # and convert to dR by subtracting surface mean
         ts = wf._make_ts('R_age')
-        self.centers_dict = construct_barycenters(self.labels,
+        self.centers_dict = construct_medoids(self.labels,
                                                   self.sublabels,
                                                   ts)
         self.centers_dict['clusters'] -= avgR
