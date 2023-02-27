@@ -68,8 +68,6 @@ def construct_medoids(labels, sublabels, ts_array):
     centers_dict = {}
     centers_dict['clusters'] = []
     centers_dict['subclusters'] = []
-    t, y, x = ts_array.shape
-    ts_array = np.moveaxis(ts_array, 0, -1)
 
     for label in range(int(np.nanmax(labels)) + 1):
         label_match_cond = labels == label
@@ -102,6 +100,46 @@ def construct_medoids(labels, sublabels, ts_array):
             subcluster_centers.append(subclust_center)
         centers_dict['subclusters'].append(subcluster_centers)
 
+    return centers_dict
+
+
+def locate_medoids(labels, sublabels, data_array):
+
+    t, y, x = data_array.shape
+    ts_array = np.moveaxis(data_array, 0, -1)
+    centers_dict = construct_medoids(labels, sublabels, ts_array)
+
+    n_ts = y*x
+    ts_array_flat = np.reshape(ts_array, (n_ts, t))
+    locations_dict = {'clusters': [], 'subclusters': []}
+    for i, cluster_ts in enumerate(centers_dict['clusters']):
+        for idx in range(n_ts):
+            arr = ts_array_flat[idx]
+            if np.array_equal(cluster_ts, arr):
+                map_idx = np.unravel_index(idx, (y, x))
+                locations_dict['clusters'].append(map_idx)
+    for i, subclust_tss in enumerate(centers_dict['subclusters']):
+        cluster_locs = []
+        for j, subclust_ts in enumerate(subclust_tss):
+            for idx in range(n_ts):
+                arr = ts_array_flat[idx]
+                if np.array_equal(subclust_ts, arr):
+                    map_idx = np.unravel_index(idx, (y, x))
+                    cluster_locs.append(map_idx)
+        locations_dict['subclusters'].append(cluster_locs)
+    return locations_dict
+
+
+def ts_from_locs(locations_dict, data_array):
+    centers_dict = {'clusters': [], 'subclusters': []}
+    ts_array = np.moveaxis(data_array, 0, -1)
+    for cluster_loc in locations_dict['clusters']:
+        centers_dict['clusters'].append(ts_array[cluster_loc])
+    for subcluster_locs in locations_dict['subclusters']:
+        subclust_centers = []
+        for subclust_loc in subcluster_locs:
+            subclust_centers.append(ts_array[subclust_loc])
+        centers_dict['subclusters'].append(subclust_centers)
     return centers_dict
 
 

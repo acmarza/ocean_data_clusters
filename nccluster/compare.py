@@ -7,7 +7,7 @@ from matplotlib.colors import Normalize
 from matplotlib.cm import get_cmap, Greys
 from matplotlib_venn import venn2
 from nccluster.ts import dRWorkflow
-from nccluster.utils import make_subclusters_map, construct_medoids
+from nccluster.utils import make_subclusters_map, locate_medoids, ts_from_locs
 from numpy.linalg import norm
 from scipy.stats import gaussian_kde
 
@@ -214,15 +214,18 @@ class ClusterMatcher:
 
 class DdR_Histogram:
 
-    def __init__(self, config_path, labels_savefile):
+    def __init__(self, config_path, config_original, labels_savefile):
         # initialise workflow (letting it compute surface ocean dR)
         wf = dRWorkflow(config_path)
+        wf_orig = dRWorkflow(config_original)
 
         # load in the subcluster assignments
         labels_ds = nc.DataSet(labels_savefile)
 
         # use nearest neighbor (not interpolate!) to regrid integer labels
         labels_ds.regrid(wf._ds, method="nn")
+
+        wf_orig.regrid_to_ds(wf._ds)
 
         # subtract surface mean R-age from centers to get their dRs
         avgR = wf.ds_var_to_array('avgR')
@@ -236,10 +239,13 @@ class DdR_Histogram:
 
         # get the barycenter of each cluster and subcluster
         # and convert to dR by subtracting surface mean
-        ts_array = wf.ds_var_to_array('R_age')[:, 0]
-        self.centers_dict = construct_medoids(self.labels,
-                                              self.sublabels,
-                                              ts_array)
+        age_array = wf_orig.ds_var_to_array('R_age')[:, 0]
+        self.locations_dict = locate_medoids(
+            self.labels, self.sublabels, age_array)
+        target_age_array = wf.ds_var_to_array('R_age')[:, 0]
+        self.centers_dict = ts_from_locs(self.locations_dict,
+                                         target_age_array)
+
         self.centers_dict['clusters'] -= avgR
         for label in range(int(np.nanmax(self.labels) + 1)):
             self.centers_dict['subclusters'][label] -= avgR
