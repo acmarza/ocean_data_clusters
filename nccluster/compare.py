@@ -408,7 +408,6 @@ class DdR_Histogram:
 
         # time series to compare subcluster time series to
         benchmarks = [subclust_center, cluster_center, self.avg_dR]
-        print(subclust_center)
 
         # get the density functions of the differences between
         # subcluster members and benchmarks

@@ -74,15 +74,31 @@ def construct_medoids(labels, sublabels, ts_array):
     for label in range(int(np.nanmax(labels)) + 1):
         label_match_cond = labels == label
         cluster_tss = ts_array[label_match_cond]
+
+        # remove nan timeseries
+        mask = np.all(np.isnan(cluster_tss), axis=1)
+        cluster_tss = cluster_tss[~mask]
+
         cluster_center = medoids(cluster_tss,
                                  distance_metric='euclidean')
+        if np.isnan(cluster_center).all():
+            print('all nan cluster center')
+            for ts in cluster_tss:
+                print(np.isnan(ts).all())
         centers_dict['clusters'].append(cluster_center)
         subcluster_centers = []
         for sublabel in range(subclust_sizes[int(label)]):
             subclust_match_cond = sublabels == sublabel
             subclust_tss = ts_array[label_match_cond & subclust_match_cond]
+
+            # remove nan timeseries
+            mask = np.all(np.isnan(subclust_tss), axis=1)
+            subclust_tss = subclust_tss[~mask]
+
             subclust_center = medoids(subclust_tss,
                                       distance_metric='euclidean')
+            if np.isnan(subclust_center).all():
+                print('all nan subcluster center')
             subcluster_centers.append(subclust_center)
         centers_dict['subclusters'].append(subcluster_centers)
 
