@@ -6,7 +6,7 @@ import xesmf as xe
 from matplotlib.colors import Normalize
 from matplotlib.cm import get_cmap, Greys
 from matplotlib_venn import venn2
-from nccluster.ts import dRWorkflow
+from nccluster.ts import TimeSeriesWorkflowBase
 from nccluster.utils import make_subclusters_map, locate_medoids, ts_from_locs
 from numpy.linalg import norm
 from scipy.stats import gaussian_kde
@@ -216,8 +216,8 @@ class DdR_Histogram:
 
     def __init__(self, config_path, config_original, labels_savefile):
         # initialise workflow (letting it compute surface ocean dR)
-        wf = dRWorkflow(config_path)
-        wf_orig = dRWorkflow(config_original)
+        wf = TimeSeriesWorkflowBase(config_path)
+        wf_orig = TimeSeriesWorkflowBase(config_original)
 
         # load in the subcluster assignments
         labels_ds = nc.DataSet(labels_savefile)
@@ -227,34 +227,19 @@ class DdR_Histogram:
 
         wf_orig.regrid_to_ds(wf._ds)
 
-        # subtract surface mean R-age from centers to get their dRs
-        avgR = wf.ds_var_to_array('avgR')
-        avgR = np.moveaxis(avgR, 0, -1)
-
         # shorthand for frequently used arrays
-        self.dR = wf.ds_var_to_array('dR')[:, 0, :, :]
-        self.avg_dR = np.nanmean(self.dR, axis=(1, 2))
+        self.R_target = wf.ds_var_to_array('R_age')[:, 0, :, :]
+        self.avg_R = np.nanmean(self.R_target, axis=(-1, -2))
         self.labels = labels_ds.to_xarray()['labels'].values
         self.sublabels = labels_ds.to_xarray()['sublabels'].values
 
-        # get the barycenter of each cluster and subcluster
-        # and convert to dR by subtracting surface mean
         age_array = wf_orig.ds_var_to_array('R_age')[:, 0]
         self.locations_dict = locate_medoids(
             self.labels, self.sublabels, age_array)
-        target_age_array = wf.ds_var_to_array('R_age')[:, 0]
         self.centers_dict = ts_from_locs(self.locations_dict,
-                                         target_age_array)
+                                         self.R_target)
 
-        self.centers_dict['clusters'] -= avgR
-        for label in range(int(np.nanmax(self.labels) + 1)):
-            self.centers_dict['subclusters'][label] -= avgR
-
-        # save the dR time series (subtract average R from raw) for later
-        self.dR_df = wf._make_df('dR')
-
-        # the timeslice for the dR map
-        self.time = 0
+        self.R_target_df = wf._make_df('R_age')
 
         # initialise main figure
         self.fig = plt.figure()
@@ -293,8 +278,8 @@ class DdR_Histogram:
         y, x = mask.shape
         mask_flat = mask.flatten()
 
-        # extract the rows in the dR dataframe corresponding to subcluster
-        subclust_df = self.dR_df.loc[~mask_flat]
+        # extract the rows in the R dataframe corresponding to subcluster
+        subclust_df = self.R_target_df.loc[~mask_flat]
 
         # convert to array of time series
         subclust_tss = np.array(subclust_df)
@@ -306,8 +291,8 @@ class DdR_Histogram:
         # for each subcluster member, compute cosine similarity to center
         cosines = np.dot(A, B)/(norm(A, axis=1)*norm(B))
 
-        # put the cosines as a new column on the dR dataframe
-        df = self.dR_df.copy()
+        # put the cosines as a new column on the R dataframe
+        df = self.R_target_df.copy()
         df.loc[df.index.isin(subclust_df.index), 'cosine'] = cosines
 
         # convert to array and reshape into 2D map
@@ -388,13 +373,13 @@ class DdR_Histogram:
         self.ts_ax.cla()
 
         # get a handle on array shapes
-        t, y, x = self.dR.shape
+        t, y, x = self.R_target.shape
 
         # repeat the masking condition for every time slice
         mask = np.repeat(np.array([mask]), repeats=t, axis=0)
 
-        # mask dR array to show current subcluster
-        intrasub = np.ma.masked_where(mask, self.dR)
+        # mask R array to show current subcluster
+        intrasub = np.ma.masked_where(mask, self.R_target)
 
         # plot time series for each subcluster member
         subclust_tss = intrasub[~intrasub.mask]
@@ -404,16 +389,16 @@ class DdR_Histogram:
         # plot the benchmarks
         subclust_line, = self.ts_ax.plot(subclust_center)
         cluster_line, = self.ts_ax.plot(cluster_center)
-        avg_line, = self.ts_ax.plot(self.avg_dR)
+        avg_line, = self.ts_ax.plot(self.avg_R)
 
         # add labels
         self.ts_ax.legend([subclust_line, cluster_line, avg_line],
-                          ['subcluster center dR',
-                           'cluster center dR',
-                           'surface mean dR'])
+                          ['subcluster center R-age',
+                           'cluster center R-age',
+                           'surface mean R-age'])
 
         # time series to compare subcluster time series to
-        benchmarks = [subclust_center, cluster_center, self.avg_dR]
+        benchmarks = [subclust_center, cluster_center, self.avg_R]
 
         # get the density functions of the differences between
         # subcluster members and benchmarks
@@ -424,6 +409,6 @@ class DdR_Histogram:
         self.hist_ax.cla()
         for dens in densities:
             self.hist_ax.plot(span, dens(span), linewidth=2, alpha=0.5)
-        self.hist_ax.legend(['DdR_subclust_center',
-                             'DdR_clust_center',
-                             'DdR_global_average'])
+        self.hist_ax.legend(['DR_subclust_center',
+                             'DR_clust_center',
+                             'DR_global_average'])
