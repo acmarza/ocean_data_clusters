@@ -4,7 +4,7 @@ import numpy as np
 import xarray as xr
 import xesmf as xe
 from matplotlib.colors import Normalize
-from matplotlib.cm import get_cmap, Greys
+from matplotlib.cm import get_cmap, Greys, ScalarMappable
 from matplotlib_venn import venn2
 from nccluster.ts import TimeSeriesWorkflowBase
 from nccluster.utils import make_subclusters_map, locate_medoids, ts_from_locs
@@ -215,7 +215,7 @@ class ClusterMatcher:
 class DdR_Histogram:
 
     def __init__(self, config_path, config_original, labels_savefile):
-        # initialise workflow (letting it compute surface ocean dR)
+        # initialise workflows (letting them compute surface ocean R-ages)
         wf = TimeSeriesWorkflowBase(config_path)
         wf_orig = TimeSeriesWorkflowBase(config_original)
 
@@ -225,32 +225,38 @@ class DdR_Histogram:
         # use nearest neighbor (not interpolate!) to regrid integer labels
         labels_ds.regrid(wf._ds, method="nn")
 
+        # also regrid the original timeseries from which labels extracted
         wf_orig.regrid_to_ds(wf._ds)
 
-        # shorthand for frequently used arrays
+        # shorthands for frequently used arrays
         self.R_target = wf.ds_var_to_array('R_age')[:, 0, :, :]
+        self.R_target_df = wf._make_df('R_age')
         self.avg_R = np.nanmean(self.R_target, axis=(-1, -2))
         self.labels = labels_ds.to_xarray()['labels'].values
         self.sublabels = labels_ds.to_xarray()['sublabels'].values
 
+        # locate the subcluster medoids in the original time series
         age_array = wf_orig.ds_var_to_array('R_age')[:, 0]
         self.locations_dict = locate_medoids(
             self.labels, self.sublabels, age_array)
+
+        # note the time series corresponding to medoids in target dataset
         self.centers_dict = ts_from_locs(self.locations_dict,
                                          self.R_target)
-
-        self.R_target_df = wf._make_df('R_age')
+        self.map_all_cosines()
 
         # initialise main figure
         self.fig = plt.figure()
 
-        # plot the subclusters on a map
+        # plot the subclusters in greyscale on map, continents in beige
         cmap = Greys
         cmap.set_bad('tan')
         self.map_ax = self.fig.add_subplot(121)
         self.map_ax.set_title('Subcluster map')
         self.map_ax.imshow(make_subclusters_map(self.labels, self.sublabels),
                            origin='lower', cmap=cmap)
+
+        # location of colorbar to the right of subcluster map
         self.cos_cax = self.map_ax.inset_axes([1.04, 0, 0.05, 1])
 
         # listen for clicks on the subcluster map
@@ -265,35 +271,95 @@ class DdR_Histogram:
         plt.tight_layout()
         plt.show()
 
-    def __get_mask(self, label, sublabel):
+    def __get_mask(self, label, sublabel=None):
         # construct a condition to extract the subcluster data points
         label_match = self.labels == label
-        sublabel_match = self.sublabels == sublabel
-        mask = ~(label_match & sublabel_match)
-
+        if sublabel:
+            sublabel_match = self.sublabels == sublabel
+            mask = ~(label_match & sublabel_match)
+        else:
+            mask = ~label_match
         return mask
 
-    def __similarity_to_subclust_center(self, mask, subclust_center):
+    def __put_cosines_in_df(self, df, mask, benchmark):
 
-        y, x = mask.shape
-        mask_flat = mask.flatten()
+        # flatten mask to match up with dataframe rows
+        mask = mask.flatten()
 
         # extract the rows in the R dataframe corresponding to subcluster
-        subclust_df = self.R_target_df.loc[~mask_flat]
+        subclust_df = df.loc[~mask].copy()
+
+        # drop any pre-existing cosines column to get only the time series
+        try:
+            subclust_df = subclust_df.drop(columns='cosine')
+        except KeyError:
+            pass
 
         # convert to array of time series
         subclust_tss = np.array(subclust_df)
 
         # column vectors
         A = subclust_tss
-        B = subclust_center
+        B = benchmark
 
         # for each subcluster member, compute cosine similarity to center
         cosines = np.dot(A, B)/(norm(A, axis=1)*norm(B))
 
         # put the cosines as a new column on the R dataframe
-        df = self.R_target_df.copy()
         df.loc[df.index.isin(subclust_df.index), 'cosine'] = cosines
+
+    def map_all_cosines(self):
+
+        fig, axes = plt.subplots(nrows=1, ncols=3)
+        cax = axes[1].inset_axes([-1, -0.5, 3, 0.1])
+
+        dfs = [self.R_target_df.copy() for i in range(3)]
+
+        y = self.R_target.shape[1]
+        x = self.R_target.shape[2]
+
+        # first map compared to global average
+        benchmark = self.avg_R
+        mask = np.isnan(self.R_target[0])
+        self.__put_cosines_in_df(dfs[0], mask=mask, benchmark=benchmark)
+
+        # second map compared to cluster medoid location
+        for label, center in enumerate(self.centers_dict['clusters']):
+            mask = self.__get_mask(label=label)
+            benchmark = center
+            self.__put_cosines_in_df(dfs[1], mask=mask, benchmark=benchmark)
+
+        # third map compared to subcluster medoid location
+        for label, centers in enumerate(self.centers_dict['subclusters']):
+            for sublabel, center in enumerate(centers):
+                mask = self.__get_mask(label=label, sublabel=sublabel)
+                benchmark = center
+                self.__put_cosines_in_df(dfs[2], mask=mask,
+                                            benchmark=benchmark)
+
+        # convert to array and reshape into 2D map
+        cosines_flat = [np.ma.masked_array(df['cosine']) for df in dfs]
+        cosines_shaped = [np.reshape(flat, (y, x)) for flat in cosines_flat]
+
+        norm = Normalize(vmin=np.nanmin(np.array(cosines_shaped)), vmax=1)
+        cmap = 'viridis'
+        mappable = ScalarMappable(norm=norm, cmap=cmap)
+
+        for ax, data in zip(axes, cosines_shaped):
+            ax.imshow(data, origin='lower', cmap=cmap, norm=norm)
+
+        # add colorbar for the similarity levels
+        fig.colorbar(mappable, ax=ax, cax=cax, orientation='horizontal')
+        plt.show()
+
+    def __plot_subclust_cosines(self, mask, subclust_center):
+
+        # note the mask shape before flattening
+        y, x = mask.shape
+
+        # copy the time series of the target dataset
+        df = self.R_target_df.copy()
+        self.__put_cosines_in_df(df, mask, subclust_center)
 
         # convert to array and reshape into 2D map
         cosines_flat = np.ma.masked_array(df['cosine'])
@@ -352,7 +418,7 @@ class DdR_Histogram:
         self.__density_plots(mask, cluster_center, subclust_center)
 
         # identify the subcluster member that best approximates the centroid
-        self.__similarity_to_subclust_center(mask, subclust_center)
+        self.__plot_subclust_cosines(mask, subclust_center)
 
         # update figure
         self.fig.canvas.draw()
@@ -384,7 +450,7 @@ class DdR_Histogram:
         # plot time series for each subcluster member
         subclust_tss = intrasub[~intrasub.mask]
         for ts in np.reshape(subclust_tss, (t, -1)).T:
-            self.ts_ax.plot(ts, color='grey')
+            self.ts_ax.plot(ts, color='grey', linewidth=0.5)
 
         # plot the benchmarks
         subclust_line, = self.ts_ax.plot(subclust_center)
