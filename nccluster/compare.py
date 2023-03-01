@@ -357,15 +357,13 @@ class DdR_Histogram:
         # update figure
         self.fig.canvas.draw()
 
-    def to_density_function(self, data, benchmark):
+    def get_diffs(self, data, benchmark):
         t, y, x = data.shape
         diff = data - benchmark.reshape(t, 1, 1).repeat(y, 1).repeat(x, 2)
         diff_not_masked = diff[~diff.mask]
         diff_abs = np.abs(diff_not_masked)
         diff_notnan = diff_abs[~np.isnan(diff_abs)]
-        density = gaussian_kde(diff_notnan)
-
-        return density
+        return diff_notnan
 
     def __density_plots(self, mask, cluster_center, subclust_center):
 
@@ -400,15 +398,22 @@ class DdR_Histogram:
         # time series to compare subcluster time series to
         benchmarks = [subclust_center, cluster_center, self.avg_R]
 
+        diffs = [self.get_diffs(intrasub, benchmark)
+                 for benchmark in benchmarks]
+
         # get the density functions of the differences between
         # subcluster members and benchmarks
-        densities = [self.to_density_function(intrasub, benchmark)
-                     for benchmark in benchmarks]
+        densities = [gaussian_kde(diff) for diff in diffs]
 
         span = range(0, 750)
+        colors = ['blue', 'orange', 'green']
         self.hist_ax.cla()
-        for dens in densities:
-            self.hist_ax.plot(span, dens(span), linewidth=2, alpha=0.5)
+        for dens, c in zip(densities, colors):
+            self.hist_ax.plot(span, dens(span), linewidth=2, alpha=0.5, c=c)
         self.hist_ax.legend(['DR_subclust_center',
                              'DR_clust_center',
                              'DR_global_average'])
+
+        medians = [np.median(diff) for diff in diffs]
+        for median, c in zip(medians, colors):
+            self.hist_ax.axvline(median, color=c)
