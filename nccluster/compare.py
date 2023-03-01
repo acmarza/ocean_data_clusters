@@ -312,6 +312,9 @@ class DdR_Histogram:
 
         fig, axes = plt.subplots(nrows=1, ncols=3)
         cax = axes[1].inset_axes([-1, -0.5, 3, 0.1])
+        titles = ['vs. global surface mean',
+                  'vs. respective cluster medoid',
+                  'vs. respective subcluster medoid']
 
         dfs = [self.R_target_df.copy() for i in range(3)]
 
@@ -335,7 +338,7 @@ class DdR_Histogram:
                 mask = self.__get_mask(label=label, sublabel=sublabel)
                 benchmark = center
                 self.__put_cosines_in_df(dfs[2], mask=mask,
-                                            benchmark=benchmark)
+                                         benchmark=benchmark)
 
         # convert to array and reshape into 2D map
         cosines_flat = [np.ma.masked_array(df['cosine']) for df in dfs]
@@ -345,8 +348,9 @@ class DdR_Histogram:
         cmap = 'viridis'
         mappable = ScalarMappable(norm=norm, cmap=cmap)
 
-        for ax, data in zip(axes, cosines_shaped):
+        for ax, data, title in zip(axes, cosines_shaped, titles):
             ax.imshow(data, origin='lower', cmap=cmap, norm=norm)
+            ax.set_title(title)
 
         # add colorbar for the similarity levels
         fig.colorbar(mappable, ax=ax, cax=cax, orientation='horizontal')
