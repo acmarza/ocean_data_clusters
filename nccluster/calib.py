@@ -58,17 +58,18 @@ class CalibrationPlotter:
                                     self._process_click)
         plt.show()
 
-    def _plot_marker(self, x, y):
+    def _plot_marker(self):
         # clear previous marker if present
         try:
             for handle in self.loc_marker:
                 handle.remove()
         except AttributeError:
             pass
-
+        y, x = self.clicked_pos
         self.loc_marker = self.map_ax.plot(x, y, color='red', marker='*')
 
-    def _plot_calib_at_location(self, y_loc, x_loc):
+    def _plot_calib_at_location(self):
+        y_loc, x_loc = self.clicked_pos
         R_age_history = self.R_ages[:, y_loc, x_loc]
         self._plot_calibration(R_age_history, self.calib_ax)
 
@@ -87,15 +88,15 @@ class CalibrationPlotter:
         self.medoid_ax = self.fig.add_subplot(235)
         self.compare_ax = self.fig.add_subplot(133)
 
-    def _plot_medoid_calib(self, y, x):
-        medoid = self._get_medoid_at_loc(y, x)
-        self._plot_calibration(medoid, self.medoid_ax)
+    def _plot_medoid_calib(self):
+        self._plot_calibration(self.medoid, self.medoid_ax)
 
-    def _get_medoid_at_loc(self, y, x):
+    def _set_medoid_at_loc(self):
+        y, x = self.clicked_pos
         label = self.labels[y, x]
         sublabel = self.sublabels[y, x]
         medoid = self.centers_dict['subclusters'][int(label)][int(sublabel)]
-        return medoid
+        self.medoid = medoid
 
     def _get_medoid_loc(self, y, x):
         label = self.labels[y, x]
@@ -103,14 +104,14 @@ class CalibrationPlotter:
         med_loc = self.locations_dict['subclusters'][int(label)][int(sublabel)]
         return med_loc
 
-    def _plot_site_vs_medoid(self, y, x):
-        medoid = self._get_medoid_at_loc(y, x)
+    def _plot_site_vs_medoid(self):
+        y, x = self.clicked_pos
         site = self.R_ages[:, y, x]
         self.compare_ax.cla()
-        self.compare_ax.plot(self.timesteps + medoid,
+        self.compare_ax.plot(self.timesteps + self.medoid,
                              self.timesteps + site)
-        self.compare_ax.plot(self.timesteps + medoid,
-                             self.timesteps + medoid)
+        self.compare_ax.plot(self.timesteps + self.medoid,
+                             self.timesteps + self.medoid)
         self.compare_ax.set_xlim(0,
                                  self.timesteps[-1] + np.nanmax(self.R_ages))
         self.compare_ax.set_ylim(0,
@@ -121,7 +122,8 @@ class CalibrationPlotter:
     def _make_base_map(self):
         return make_subclusters_map(self.labels, self.sublabels)
 
-    def _plot_medoid_marker(self, y, x):
+    def _plot_medoid_marker(self):
+        y, x = self.clicked_pos
 
         # clear previous marker if present
         try:
@@ -138,9 +140,17 @@ class CalibrationPlotter:
             return
         y_pos = int(event.ydata)
         x_pos = int(event.xdata)
-        self._plot_calib_at_location(y_pos, x_pos)
-        self._plot_medoid_calib(y_pos, x_pos)
-        self._plot_site_vs_medoid(y_pos, x_pos)
-        self._plot_marker(x_pos, y_pos)
-        self._plot_medoid_marker(y_pos, x_pos)
+
+        self.clicked_pos = (y_pos, x_pos)
+        self._plot_marker()
+
+        self._plot_calib_at_location()
+
+        self._set_medoid_at_loc()
+        self._plot_medoid_calib()
+        self._plot_medoid_marker()
+
+        # self._select_points_from_medoid
+
+        self._plot_site_vs_medoid()
         self.fig.canvas.draw()
