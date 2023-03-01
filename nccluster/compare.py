@@ -4,10 +4,11 @@ import numpy as np
 import xarray as xr
 import xesmf as xe
 from matplotlib.colors import Normalize
-from matplotlib.cm import get_cmap, Greys
+from matplotlib.cm import get_cmap, Greys, ScalarMappable
 from matplotlib_venn import venn2
 from nccluster.ts import TimeSeriesWorkflowBase
-from nccluster.utils import make_subclusters_map, locate_medoids, ts_from_locs
+from nccluster.utils import make_subclusters_map, locate_medoids,\
+    ts_from_locs, make_subclust_sizes
 from numpy.linalg import norm
 from scipy.stats import gaussian_kde
 
@@ -238,6 +239,7 @@ class DdR_Histogram:
             self.labels, self.sublabels, age_array)
         self.centers_dict = ts_from_locs(self.locations_dict,
                                          self.R_target)
+        self.map_median_diff()
 
         self.R_target_df = wf._make_df('R_age')
 
@@ -365,23 +367,27 @@ class DdR_Histogram:
         diff_notnan = diff_abs[~np.isnan(diff_abs)]
         return diff_notnan
 
-    def __density_plots(self, mask, cluster_center, subclust_center):
-
-        # clear the time series plot
-        self.ts_ax.cla()
-
+    def get_subcluster_data(self, mask, data):
         # get a handle on array shapes
-        t, y, x = self.R_target.shape
+        t, y, x = data.shape
 
         # repeat the masking condition for every time slice
         mask = np.repeat(np.array([mask]), repeats=t, axis=0)
 
         # mask R array to show current subcluster
-        intrasub = np.ma.masked_where(mask, self.R_target)
+        intrasub = np.ma.masked_where(mask, data)
+
+        return intrasub
+
+    def __density_plots(self, mask, cluster_center, subclust_center):
+
+        # clear the time series plot
+        self.ts_ax.cla()
+        intrasub = self.get_subcluster_data(mask, self.R_target)
 
         # plot time series for each subcluster member
         subclust_tss = intrasub[~intrasub.mask]
-        for ts in np.reshape(subclust_tss, (t, -1)).T:
+        for ts in np.reshape(subclust_tss, (intrasub.shape[0], -1)).T:
             self.ts_ax.plot(ts, color='grey')
 
         # plot the benchmarks
@@ -417,3 +423,36 @@ class DdR_Histogram:
         medians = [np.median(diff) for diff in diffs]
         for median, c in zip(medians, colors):
             self.hist_ax.axvline(median, color=c)
+
+    def map_median_diff(self):
+        n_labels = int(np.nanmax(self.labels) + 1)
+        subclust_sizes = make_subclust_sizes(self.labels, self.sublabels)
+        diff_maps = [np.full_like(self.labels, np.nan) for i in range(3)]
+
+        for label in range(n_labels):
+            for sublabel in range(subclust_sizes[label]):
+                mask = self.__get_mask(label, sublabel)
+                intrasub_ages = self.get_subcluster_data(mask, self.R_target)
+                for benchmark, diff_map in zip([
+                    self.avg_R,
+                    self.centers_dict['clusters'][label],
+                    self.centers_dict['subclusters'][label][sublabel]
+                ], diff_maps):
+                    diffs = self.get_diffs(intrasub_ages, benchmark)
+                    median = np.median(diffs)
+                    diff_map[~mask] = median
+
+        cmap = 'viridis'
+        norm = Normalize(vmin=np.nanmin(np.array(diff_maps)),
+                         vmax=np.nanmax(np.array(diff_maps)))
+        titles = ['vs. global surface mean',
+                  'vs. cluster center',
+                  'vs. subcluster center']
+        fig, axes = plt.subplots(nrows=1, ncols=3)
+        cax = axes[1].inset_axes([-1, -0.5, 3, 0.25])
+        mappable = ScalarMappable(norm=norm, cmap=cmap)
+        for ax, diff_map, title in zip(axes, diff_maps, titles):
+            ax.imshow(diff_map, origin='lower', norm=norm, cmap=cmap)
+            ax.set_title(title)
+        fig.colorbar(mappable, cax=cax, orientation='horizontal')
+        plt.show()
