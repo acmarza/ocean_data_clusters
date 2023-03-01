@@ -1,7 +1,9 @@
 from nccluster.radiocarbon import RadioCarbonWorkflow
-from nccluster.utils import make_subclusters_map
+from nccluster.utils import make_subclusters_map, ts_from_locs
+import json
 import numpy as np
 import matplotlib.pyplot as plt
+import xarray as xr
 
 
 class CalibrationWorkflowBase(RadioCarbonWorkflow):
@@ -40,8 +42,7 @@ class CalibrationPlotter:
         wf = CalibrationWorkflowBase(config_path)
         self.R_ages = wf.R_ages
         self.timesteps = wf.timesteps
-        self.fig, (self.map_ax, self.calib_ax) = plt.subplots(1, 2)
-        self.interactive_calib_plot()
+        self._init_fig()
 
     def interactive_calib_plot(self):
         base_map = self._make_base_map()
@@ -49,6 +50,9 @@ class CalibrationPlotter:
         self.fig.canvas.mpl_connect('button_press_event',
                                     self._process_click)
         plt.show()
+
+    def _init_fig(self):
+        self.fig, (self.map_ax, self.calib_ax) = plt.subplots(1, 2)
 
     def _make_base_map(self):
         return np.isnan(self.R_ages[0])
@@ -58,26 +62,64 @@ class CalibrationPlotter:
             return
         y_pos = int(event.ydata)
         x_pos = int(event.xdata)
-        self.plot_calibration(y_pos, x_pos)
+        self._plot_calib_at_location(y_pos, x_pos)
+        self._plot_marker(x_pos, y_pos)
+        self.fig.canvas.draw()
 
+    def _plot_marker(self, x, y):
         # clear previous marker if present
         try:
             for handle in self.loc_marker:
                 handle.remove()
         except AttributeError:
             pass
-        self.loc_marker = self.map_ax.plot(x_pos, y_pos,
-                                           color='black',
-                                           marker='*'
-                                           )
-        self.fig.canvas.draw()
 
-    def plot_calibration(self, y_loc, x_loc):
+        self.loc_marker = self.map_ax.plot(x, y, color='red', marker='*')
 
+    def _plot_calib_at_location(self, y_loc, x_loc):
         R_age_history = self.R_ages[:, y_loc, x_loc]
+        self._plot_calibration(R_age_history, self.calib_ax)
 
-        self.calib_ax.cla()
-        self.calib_ax.plot(self.timesteps, self.timesteps + R_age_history)
-        self.calib_ax.plot(self.timesteps, self.timesteps)
-        self.calib_ax.set_xlabel('atmosphere age')
-        self.calib_ax.set_ylabel('ocean age')
+    def _plot_calibration(self, R_age_history, ax):
+        ax.cla()
+        ax.plot(self.timesteps, self.timesteps + R_age_history)
+        ax.plot(self.timesteps, self.timesteps)
+        ax.set_xlabel('atmosphere age')
+        ax.set_ylabel('ocean age')
+
+
+class CalibrationSampler(CalibrationPlotter):
+
+    def __init__(self, config_path, sublabels_file, sublabels_locs_file):
+        CalibrationPlotter.__init__(self, config_path)
+        ds = xr.load_dataset(sublabels_file)
+        self.labels = ds['labels'].values
+        self.sublabels = ds['sublabels'].values
+        with open(sublabels_locs_file, 'rb') as file:
+            locations_dict = json.load(file)
+            self.centers_dict = ts_from_locs(locations_dict,
+                                             self.R_ages)
+            print(self.centers_dict['clusters'][0].shape)
+
+    def _init_fig(self):
+        self.fig, (self.map_ax,
+                   self.calib_ax, self.medoid_ax) = plt.subplots(1, 3)
+
+    def _plot_medoid_calib(self, y, x):
+        label = self.labels[y, x]
+        sublabel = self.sublabels[y, x]
+        medoid = self.centers_dict['subclusters'][int(label)][int(sublabel)]
+        self._plot_calibration(medoid, self.medoid_ax)
+
+    def _make_base_map(self):
+        return make_subclusters_map(self.labels, self.sublabels)
+
+    def _process_click(self, event):
+        if not event.inaxes == self.map_ax:
+            return
+        y_pos = int(event.ydata)
+        x_pos = int(event.xdata)
+        self._plot_calib_at_location(y_pos, x_pos)
+        self._plot_medoid_calib(y_pos, x_pos)
+        self._plot_marker(x_pos, y_pos)
+        self.fig.canvas.draw()

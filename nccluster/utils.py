@@ -81,8 +81,6 @@ def construct_medoids(labels, sublabels, ts_array):
                                  distance_metric='euclidean')
         if np.isnan(cluster_center).all():
             print('all nan cluster center')
-            for ts in cluster_tss:
-                print(np.isnan(ts).all())
         centers_dict['clusters'].append(cluster_center)
         subcluster_centers = []
         for sublabel in range(subclust_sizes[int(label)]):
@@ -117,6 +115,8 @@ def locate_medoids(labels, sublabels, data_array):
             arr = ts_array_flat[idx]
             if np.array_equal(cluster_ts, arr):
                 map_idx = np.unravel_index(idx, (y, x))
+                a, b = map_idx
+                map_idx = (int(a), int(b))
                 locations_dict['clusters'].append(map_idx)
     for i, subclust_tss in enumerate(centers_dict['subclusters']):
         cluster_locs = []
@@ -125,6 +125,8 @@ def locate_medoids(labels, sublabels, data_array):
                 arr = ts_array_flat[idx]
                 if np.array_equal(subclust_ts, arr):
                     map_idx = np.unravel_index(idx, (y, x))
+                    a, b = map_idx
+                    map_idx = (int(a), int(b))
                     cluster_locs.append(map_idx)
         locations_dict['subclusters'].append(cluster_locs)
     return locations_dict
@@ -134,10 +136,12 @@ def ts_from_locs(locations_dict, data_array):
     centers_dict = {'clusters': [], 'subclusters': []}
     ts_array = np.moveaxis(data_array, 0, -1)
     for cluster_loc in locations_dict['clusters']:
+        cluster_loc = tuple(cluster_loc)
         centers_dict['clusters'].append(ts_array[cluster_loc])
     for subcluster_locs in locations_dict['subclusters']:
         subclust_centers = []
         for subclust_loc in subcluster_locs:
+            subclust_loc = tuple(subclust_loc)
             subclust_centers.append(ts_array[subclust_loc])
         centers_dict['subclusters'].append(subclust_centers)
     return centers_dict
