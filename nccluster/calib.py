@@ -56,6 +56,7 @@ class CalibrationPlotter:
         self.map_ax.imshow(base_map, origin='lower')
         self.fig.canvas.mpl_connect('button_press_event',
                                     self._process_click)
+        plt.tight_layout()
         plt.show()
 
     def _plot_marker(self):
@@ -69,27 +70,35 @@ class CalibrationPlotter:
         self.loc_marker = self.map_ax.plot(x, y, color='red', marker='*')
 
     def _plot_calib_at_location(self):
-        y_loc, x_loc = self.clicked_pos
-        R_age_history = self.R_ages[:, y_loc, x_loc]
-        self._plot_calibration(R_age_history, self.calib_ax)
+        self._plot_calibration(self.site, self.calib_ax,
+                               title='selected site')
 
-    def _plot_calibration(self, R_age_history, ax):
-        ax.cla()
-        ax.plot(self.timesteps, self.timesteps + R_age_history)
-        ax.plot(self.timesteps, self.timesteps)
-        ax.set_ylim(0, self.timesteps[-1] + np.nanmax(self.R_ages))
-        ax.set_xlabel('atmosphere age')
-        ax.set_ylabel('ocean age')
+    def _plot_calibration(self, R_age_history, ax, refresh=True, c='red',
+                          title='calibration'):
+        if refresh:
+            ax.cla()
+            ax.plot(self.timesteps, self.timesteps)
+            ax.set_ylim(0, self.timesteps[-1] + np.nanmax(self.R_ages))
+            ax.set_xlabel('atmosphere age')
+            ax.set_ylabel('ocean age')
+        ax.plot(self.timesteps, self.timesteps + R_age_history, c=c)
+        ax.set_title(title)
 
     def _init_fig(self):
         self.fig = plt.figure()
         self.map_ax = self.fig.add_subplot(131)
         self.calib_ax = self.fig.add_subplot(232)
         self.medoid_ax = self.fig.add_subplot(235)
-        self.compare_ax = self.fig.add_subplot(133)
+        self.compare_ax = self.fig.add_subplot(233)
+        self.age_model_ax = self.fig.add_subplot(236)
 
     def _plot_medoid_calib(self):
-        self._plot_calibration(self.medoid, self.medoid_ax)
+        self._plot_calibration(self.medoid, self.medoid_ax, c='magenta',
+                               title='medoid')
+
+    def _set_ts_at_loc(self):
+        y, x = self.clicked_pos
+        self.site = self.R_ages[:, y, x]
 
     def _set_medoid_at_loc(self):
         y, x = self.clicked_pos
@@ -105,19 +114,17 @@ class CalibrationPlotter:
         return med_loc
 
     def _plot_site_vs_medoid(self):
-        y, x = self.clicked_pos
-        site = self.R_ages[:, y, x]
         self.compare_ax.cla()
         self.compare_ax.plot(self.timesteps + self.medoid,
-                             self.timesteps + site)
+                             self.timesteps + self.site)
         self.compare_ax.plot(self.timesteps + self.medoid,
                              self.timesteps + self.medoid)
         self.compare_ax.set_xlim(0,
                                  self.timesteps[-1] + np.nanmax(self.R_ages))
         self.compare_ax.set_ylim(0,
                                  self.timesteps[-1] + np.nanmax(self.R_ages))
-        self.compare_ax.set_xlabel('medoid R-age')
-        self.compare_ax.set_ylabel('site R-age')
+        self.compare_ax.set_xlabel('medoid ocean age')
+        self.compare_ax.set_ylabel('site ocean age')
 
     def _make_base_map(self):
         return make_subclusters_map(self.labels, self.sublabels)
@@ -135,6 +142,47 @@ class CalibrationPlotter:
         self.medoid_marker = self.map_ax.plot(x, y, color='magenta',
                                               marker='o')
 
+    def _select_points_from_ts(self, ts, n_points=20):
+        idx = range(len(ts))
+        choice_idx = np.random.choice(idx, size=n_points, replace=False)
+        choice_idx = np.sort(choice_idx)
+        return choice_idx
+
+    def _plot_medoid_samples(self, choice_idx):
+        x = self.timesteps[choice_idx]
+        y = self.medoid[choice_idx]
+
+        self.medoid_ax.plot(x, x + y,
+                            marker='o', markersize=2, c='green',
+                            linestyle='None')
+
+    def _plot_site_samples(self, choice_idx):
+        x = self.timesteps[choice_idx]
+        y = self.site[choice_idx]
+
+        self.calib_ax.plot(x, x + y,
+                           marker='o', markersize=2, c='blue',
+                           linestyle='None')
+
+    def _plot_age_model(self, choice_idx):
+
+        self._plot_calibration(self.interp, ax=self.age_model_ax, c='green',
+                               title='age model from medoid')
+
+    def _set_age_model(self, choice_idx):
+        x = self.timesteps
+        xp = self.timesteps[choice_idx]
+        fp = self.medoid[choice_idx]
+        self.interp = np.interp(x, xp, fp)
+
+    def _get_sample_calibrated_ts(self, sample_idx):
+
+        sample_r_ages = self.site[sample_idx]
+        calibrated_samples = np.interp(self.timesteps[sample_idx] + sample_r_ages,
+                                       self.timesteps + self.interp,
+                                       self.timesteps)
+        return calibrated_samples
+
     def _process_click(self, event):
         if not event.inaxes == self.map_ax:
             return
@@ -142,6 +190,7 @@ class CalibrationPlotter:
         x_pos = int(event.xdata)
 
         self.clicked_pos = (y_pos, x_pos)
+        self._set_ts_at_loc()
         self._plot_marker()
 
         self._plot_calib_at_location()
@@ -150,7 +199,22 @@ class CalibrationPlotter:
         self._plot_medoid_calib()
         self._plot_medoid_marker()
 
-        # self._select_points_from_medoid
+        choice_idx = self._select_points_from_ts(self.medoid)
+        self._plot_medoid_samples(choice_idx)
+        self._set_age_model(choice_idx)
+        self._plot_age_model(choice_idx)
 
-        self._plot_site_vs_medoid()
+        sample_idx = self._select_points_from_ts(self.site)
+        self._plot_site_samples(sample_idx)
+        calibrated_sample = self._get_sample_calibrated_ts(sample_idx)
+        y = self.timesteps[sample_idx] + self.site[sample_idx]
+        self.age_model_ax.plot(
+            calibrated_sample,
+            y,
+            c='blue', marker='o', markersize=2, linestyle='None')
+        self.compare_ax.plot(self.timesteps, self.timesteps)
+        self.compare_ax.plot(self.timesteps[sample_idx],
+                             calibrated_sample)
+        self.compare_ax.set_xlabel('true age')
+        self.compare_ax.set_ylabel('reconstructed age')
         self.fig.canvas.draw()
