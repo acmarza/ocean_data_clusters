@@ -38,11 +38,18 @@ class CalibrationWorkflowBase(RadioCarbonWorkflow):
 
 class CalibrationPlotter:
 
-    def __init__(self, config_path):
+    def __init__(self, config_path, sublabels_file, sublabels_locs_file):
         wf = CalibrationWorkflowBase(config_path)
         self.R_ages = wf.R_ages
         self.timesteps = wf.timesteps
         self._init_fig()
+        ds = xr.load_dataset(sublabels_file)
+        self.labels = ds['labels'].values
+        self.sublabels = ds['sublabels'].values
+        with open(sublabels_locs_file, 'rb') as file:
+            self.locations_dict = json.load(file)
+            self.centers_dict = ts_from_locs(self.locations_dict,
+                                             self.R_ages)
 
     def interactive_calib_plot(self):
         base_map = self._make_base_map()
@@ -50,21 +57,6 @@ class CalibrationPlotter:
         self.fig.canvas.mpl_connect('button_press_event',
                                     self._process_click)
         plt.show()
-
-    def _init_fig(self):
-        self.fig, (self.map_ax, self.calib_ax) = plt.subplots(1, 2)
-
-    def _make_base_map(self):
-        return np.isnan(self.R_ages[0])
-
-    def _process_click(self, event):
-        if not event.inaxes == self.map_ax:
-            return
-        y_pos = int(event.ydata)
-        x_pos = int(event.xdata)
-        self._plot_calib_at_location(y_pos, x_pos)
-        self._plot_marker(x_pos, y_pos)
-        self.fig.canvas.draw()
 
     def _plot_marker(self, x, y):
         # clear previous marker if present
@@ -84,35 +76,62 @@ class CalibrationPlotter:
         ax.cla()
         ax.plot(self.timesteps, self.timesteps + R_age_history)
         ax.plot(self.timesteps, self.timesteps)
+        ax.set_ylim(0, self.timesteps[-1] + np.nanmax(self.R_ages))
         ax.set_xlabel('atmosphere age')
         ax.set_ylabel('ocean age')
 
-
-class CalibrationSampler(CalibrationPlotter):
-
-    def __init__(self, config_path, sublabels_file, sublabels_locs_file):
-        CalibrationPlotter.__init__(self, config_path)
-        ds = xr.load_dataset(sublabels_file)
-        self.labels = ds['labels'].values
-        self.sublabels = ds['sublabels'].values
-        with open(sublabels_locs_file, 'rb') as file:
-            locations_dict = json.load(file)
-            self.centers_dict = ts_from_locs(locations_dict,
-                                             self.R_ages)
-            print(self.centers_dict['clusters'][0].shape)
-
     def _init_fig(self):
-        self.fig, (self.map_ax,
-                   self.calib_ax, self.medoid_ax) = plt.subplots(1, 3)
+        self.fig = plt.figure()
+        self.map_ax = self.fig.add_subplot(131)
+        self.calib_ax = self.fig.add_subplot(232)
+        self.medoid_ax = self.fig.add_subplot(235)
+        self.compare_ax = self.fig.add_subplot(133)
 
     def _plot_medoid_calib(self, y, x):
+        medoid = self._get_medoid_at_loc(y, x)
+        self._plot_calibration(medoid, self.medoid_ax)
+
+    def _get_medoid_at_loc(self, y, x):
         label = self.labels[y, x]
         sublabel = self.sublabels[y, x]
         medoid = self.centers_dict['subclusters'][int(label)][int(sublabel)]
-        self._plot_calibration(medoid, self.medoid_ax)
+        return medoid
+
+    def _get_medoid_loc(self, y, x):
+        label = self.labels[y, x]
+        sublabel = self.sublabels[y, x]
+        med_loc = self.locations_dict['subclusters'][int(label)][int(sublabel)]
+        return med_loc
+
+    def _plot_site_vs_medoid(self, y, x):
+        medoid = self._get_medoid_at_loc(y, x)
+        site = self.R_ages[:, y, x]
+        self.compare_ax.cla()
+        self.compare_ax.plot(self.timesteps + medoid,
+                             self.timesteps + site)
+        self.compare_ax.plot(self.timesteps + medoid,
+                             self.timesteps + medoid)
+        self.compare_ax.set_xlim(0,
+                                 self.timesteps[-1] + np.nanmax(self.R_ages))
+        self.compare_ax.set_ylim(0,
+                                 self.timesteps[-1] + np.nanmax(self.R_ages))
+        self.compare_ax.set_xlabel('medoid R-age')
+        self.compare_ax.set_ylabel('site R-age')
 
     def _make_base_map(self):
         return make_subclusters_map(self.labels, self.sublabels)
+
+    def _plot_medoid_marker(self, y, x):
+
+        # clear previous marker if present
+        try:
+            for handle in self.medoid_marker:
+                handle.remove()
+        except AttributeError:
+            pass
+        y, x = self._get_medoid_loc(y, x)
+        self.medoid_marker = self.map_ax.plot(x, y, color='magenta',
+                                              marker='o')
 
     def _process_click(self, event):
         if not event.inaxes == self.map_ax:
@@ -121,5 +140,7 @@ class CalibrationSampler(CalibrationPlotter):
         x_pos = int(event.xdata)
         self._plot_calib_at_location(y_pos, x_pos)
         self._plot_medoid_calib(y_pos, x_pos)
+        self._plot_site_vs_medoid(y_pos, x_pos)
         self._plot_marker(x_pos, y_pos)
+        self._plot_medoid_marker(y_pos, x_pos)
         self.fig.canvas.draw()
