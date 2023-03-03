@@ -3,7 +3,7 @@ import nctoolkit as nc
 import numpy as np
 import xarray as xr
 import xesmf as xe
-from matplotlib.colors import Normalize
+from matplotlib.colors import Normalize, LogNorm
 from matplotlib.cm import get_cmap, Greys, ScalarMappable
 from matplotlib_venn import venn2
 from nccluster.ts import TimeSeriesWorkflowBase
@@ -306,7 +306,7 @@ class DdR_Histogram:
         cosines = np.dot(A, B)/(norm(A, axis=1)*norm(B))
 
         # put the cosines as a new column on the R dataframe
-        df.loc[df.index.isin(subclust_df.index), 'cosine'] = cosines
+        df.loc[df.index.isin(subclust_df.index), 'cosine'] = 1 - cosines
 
     def map_all_cosines(self):
 
@@ -344,8 +344,8 @@ class DdR_Histogram:
         cosines_flat = [np.ma.masked_array(df['cosine']) for df in dfs]
         cosines_shaped = [np.reshape(flat, (y, x)) for flat in cosines_flat]
 
-        norm = Normalize(vmin=np.nanmin(np.array(cosines_shaped)), vmax=1)
-        cmap = 'cividis'
+        norm = LogNorm(vmin=1e-5, vmax=1e-1)
+        cmap = 'viridis'
         mappable = ScalarMappable(norm=norm, cmap=cmap)
 
         for ax, data, title in zip(axes, cosines_shaped, titles):
