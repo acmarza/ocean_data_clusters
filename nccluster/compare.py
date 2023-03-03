@@ -3,7 +3,7 @@ import nctoolkit as nc
 import numpy as np
 import xarray as xr
 import xesmf as xe
-from matplotlib.colors import Normalize
+from matplotlib.colors import Normalize, LogNorm
 from matplotlib.cm import get_cmap, Greys, ScalarMappable
 from matplotlib_venn import venn2
 from nccluster.ts import TimeSeriesWorkflowBase
@@ -443,8 +443,7 @@ class DdR_Histogram:
                     diff_map[~mask] = median
 
         cmap = 'viridis'
-        norm = Normalize(vmin=np.nanmin(np.array(diff_maps)),
-                         vmax=np.nanmax(np.array(diff_maps)))
+        norm = LogNorm(vmin=10, vmax=1000)
         titles = ['vs. global surface mean',
                   'vs. cluster center',
                   'vs. subcluster center']
