@@ -345,7 +345,7 @@ class DdR_Histogram:
         cosines_shaped = [np.reshape(flat, (y, x)) for flat in cosines_flat]
 
         norm = Normalize(vmin=np.nanmin(np.array(cosines_shaped)), vmax=1)
-        cmap = 'viridis'
+        cmap = 'cividis'
         mappable = ScalarMappable(norm=norm, cmap=cmap)
 
         for ax, data, title in zip(axes, cosines_shaped, titles):
