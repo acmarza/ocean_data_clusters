@@ -239,7 +239,7 @@ class DdR_Histogram:
             self.labels, self.sublabels, age_array)
         self.centers_dict = ts_from_locs(self.locations_dict,
                                          self.R_target)
-        self.map_median_diff()
+        self.map_mean_diff()
 
         self.R_target_df = wf._make_df('R_age')
 
@@ -420,11 +420,11 @@ class DdR_Histogram:
                              'DR_clust_center',
                              'DR_global_average'])
 
-        medians = [np.median(diff) for diff in diffs]
-        for median, c in zip(medians, colors):
-            self.hist_ax.axvline(median, color=c)
+        means = [np.mean(diff) for diff in diffs]
+        for mean, c in zip(means, colors):
+            self.hist_ax.axvline(mean, color=c)
 
-    def map_median_diff(self):
+    def map_mean_diff(self):
         n_labels = int(np.nanmax(self.labels) + 1)
         subclust_sizes = make_subclust_sizes(self.labels, self.sublabels)
         diff_maps = [np.full_like(self.labels, np.nan) for i in range(3)]
@@ -439,8 +439,8 @@ class DdR_Histogram:
                     self.centers_dict['subclusters'][label][sublabel]
                 ], diff_maps):
                     diffs = self.get_diffs(intrasub_ages, benchmark)
-                    median = np.median(diffs)
-                    diff_map[~mask] = median
+                    mean = np.mean(diffs)
+                    diff_map[~mask] = mean
 
         cmap = 'viridis'
         norm = LogNorm(vmin=10, vmax=1000)
