@@ -253,7 +253,9 @@ class DdR_Histogram:
         self.map_ax.set_title('Subcluster map')
         self.map_ax.imshow(make_subclusters_map(self.labels, self.sublabels),
                            origin='lower', cmap=cmap)
-        self.cos_cax = self.map_ax.inset_axes([1.04, 0, 0.05, 1])
+        self.map_ax.xaxis.tick_top()
+        self.map_ax.xaxis.set_label_position("top")
+        self.cos_cax = self.map_ax.inset_axes([0, -0.1, 1, 0.05])
 
         # listen for clicks on the subcluster map
         self.__cid = self.fig.canvas.mpl_connect(
@@ -314,7 +316,8 @@ class DdR_Histogram:
 
         # add colorbar for the similarity levels
         self.fig.colorbar(self.subclust_overlay, ax=self.map_ax,
-                          cax=self.cos_cax, cmap='coolwarm')
+                          cax=self.cos_cax, cmap='coolwarm',
+                          orientation='horizontal', label='cosine similarity')
 
         # remove previous marker
         try:
@@ -327,7 +330,7 @@ class DdR_Histogram:
         idx_flat = np.nanargmax(cosines_shaped)
         marker_x, marker_y = np.unravel_index(idx_flat, cosines_shaped.shape)
         self.marker = self.map_ax.plot(marker_y, marker_x,
-                                       color='magenta',
+                                       color='lime',
                                        marker="*")
 
         return
@@ -388,7 +391,7 @@ class DdR_Histogram:
         # plot time series for each subcluster member
         subclust_tss = intrasub[~intrasub.mask]
         for ts in np.reshape(subclust_tss, (intrasub.shape[0], -1)).T:
-            self.ts_ax.plot(ts, color='grey')
+            ts_line, = self.ts_ax.plot(ts, color='grey', linewidth=0.3)
 
         # plot the benchmarks
         subclust_line, = self.ts_ax.plot(subclust_center)
@@ -396,10 +399,13 @@ class DdR_Histogram:
         avg_line, = self.ts_ax.plot(self.avg_R)
 
         # add labels
-        self.ts_ax.legend([subclust_line, cluster_line, avg_line],
-                          ['subcluster center R-age',
-                           'cluster center R-age',
-                           'surface mean R-age'])
+        self.ts_ax.legend([subclust_line, cluster_line, avg_line, ts_line],
+                          ['subcluster medoid R-age',
+                           'cluster medoid R-age',
+                           'surface mean R-age',
+                           'subcluster members R-ages'])
+        self.ts_ax.set_xlabel('time step')
+        self.ts_ax.set_ylabel('R-age (yrs)')
 
         # time series to compare subcluster time series to
         benchmarks = [subclust_center, cluster_center, self.avg_R]
@@ -416,9 +422,11 @@ class DdR_Histogram:
         self.hist_ax.cla()
         for dens, c in zip(densities, colors):
             self.hist_ax.plot(span, dens(span), linewidth=2, alpha=0.5, c=c)
-        self.hist_ax.legend(['DR_subclust_center',
-                             'DR_clust_center',
-                             'DR_global_average'])
+        self.hist_ax.legend(['ΔR vs. subcluster medoid',
+                             'ΔR vs. cluster medoid',
+                             'ΔR vs. global average'])
+        self.hist_ax.set_xlabel('ΔR (yrs)')
+        self.hist_ax.set_ylabel('Probability density function')
 
         means = [np.mean(diff) for diff in diffs]
         for mean, c in zip(means, colors):
@@ -445,13 +453,24 @@ class DdR_Histogram:
         cmap = 'viridis'
         norm = LogNorm(vmin=10, vmax=1000)
         titles = ['vs. global surface mean',
-                  'vs. cluster center',
-                  'vs. subcluster center']
+                  'vs. cluster medoid',
+                  'vs. subcluster medoid']
         fig, axes = plt.subplots(nrows=1, ncols=3)
-        cax = axes[1].inset_axes([-1, -0.5, 3, 0.25])
+        cax = axes[1].inset_axes([-1, -0.4, 3, 0.2])
         mappable = ScalarMappable(norm=norm, cmap=cmap)
         for ax, diff_map, title in zip(axes, diff_maps, titles):
             ax.imshow(diff_map, origin='lower', norm=norm, cmap=cmap)
             ax.set_title(title)
-        fig.colorbar(mappable, cax=cax, orientation='horizontal')
+
+            global_mean_DR = int(np.nanmean(diff_map))
+            ax.text(0.05, -0.05,
+                    f"average global ΔR: {global_mean_DR}",
+                    horizontalalignment='left',
+                    verticalalignment='top',
+                    transform=ax.transAxes)
+            ax.set_xticks([])
+            ax.set_yticks([])
+
+        fig.colorbar(mappable, cax=cax, orientation='horizontal',
+                     label="mean of ΔR distribution (yrs)")
         plt.show()
