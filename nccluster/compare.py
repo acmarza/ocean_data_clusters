@@ -517,8 +517,9 @@ class DdR_Histogram:
             ax.set_title(title)
 
             global_mean_DR = int(np.nanmean(diff_map))
+            global_sigma_DR = int(np.nanstd(diff_map))
             ax.text(0.05, -0.05,
-                    f"average global ΔR: {global_mean_DR}",
+                    f"average global ΔR: {global_mean_DR} ± {global_sigma_DR}",
                     horizontalalignment='left',
                     verticalalignment='top',
                     transform=ax.transAxes)
