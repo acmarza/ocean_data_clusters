@@ -432,6 +432,10 @@ class DdR_Histogram:
         for mean, c in zip(means, colors):
             self.hist_ax.axvline(mean, color=c)
 
+        stddevs = [np.std(diff) for diff in diffs]
+        for mean, sigma in zip(means, stddevs):
+            print(f"{mean}±{sigma}")
+
     def map_mean_diff(self):
         n_labels = int(np.nanmax(self.labels) + 1)
         subclust_sizes = make_subclust_sizes(self.labels, self.sublabels)
