@@ -439,6 +439,10 @@ class DdR_Histogram:
         for mean, c in zip(means, colors):
             self.hist_ax.axvline(mean, color=c)
 
+        stddevs = [np.std(diff) for diff in diffs]
+        for mean, sigma in zip(means, stddevs):
+            print(f"{mean}±{sigma}")
+
     def map_mean_diff(self):
         n_labels = int(np.nanmax(self.labels) + 1)
         subclust_sizes = make_subclust_sizes(self.labels, self.sublabels)
@@ -470,8 +474,9 @@ class DdR_Histogram:
             ax.set_title(title)
 
             global_mean_DR = int(np.nanmean(diff_map))
+            global_sigma_DR = int(np.nanstd(diff_map))
             ax.text(0.05, -0.05,
-                    f"average global ΔR: {global_mean_DR}",
+                    f"average global ΔR: {global_mean_DR} ± {global_sigma_DR}",
                     horizontalalignment='left',
                     verticalalignment='top',
                     transform=ax.transAxes)
