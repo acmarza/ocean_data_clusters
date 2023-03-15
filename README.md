@@ -24,6 +24,7 @@ Activate the environment:
 conda activate nccluster
 ```
 ## Usage
+Instructions out of date! Not guaranteed to work.
 Edit the example configuration file in folder 'configs' as needed (see explanations therein). 
 ### K-means clustering
 
