@@ -244,7 +244,6 @@ class DdR_Histogram:
         # note the time series corresponding to medoids in target dataset
         self.centers_dict = ts_from_locs(self.locations_dict,
                                          self.R_target)
-        self.map_diffs()
 
         self.R_target_df = wf._make_df('R_age')
 
@@ -307,7 +306,7 @@ class DdR_Histogram:
         cosines = np.dot(A, B)/(norm(A, axis=1)*norm(B))
 
         # put the cosines as a new column on the R dataframe
-        df.loc[df.index.isin(subclust_df.index), 'cosine'] = 1 - cosines
+        df.loc[df.index.isin(subclust_df.index), 'cosine'] = cosines
 
     def map_all_cosines(self):
 
@@ -506,9 +505,9 @@ class DdR_Histogram:
         for mean, c in zip(means, colors):
             self.hist_ax.axvline(mean, color=c)
 
-        stddevs = [np.std(diff) for diff in diffs]
-        for mean, sigma in zip(means, stddevs):
-            print(f"{mean}±{sigma}")
+        # stddevs = [np.std(diff) for diff in diffs]
+        # for mean, sigma in zip(means, stddevs):
+        #    print(f"{mean}±{sigma}")
 
     def map_mean_diff(self):
         n_labels = int(np.nanmax(self.labels) + 1)
