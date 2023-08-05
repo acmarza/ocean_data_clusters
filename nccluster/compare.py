@@ -244,9 +244,6 @@ class DdR_Histogram:
         # note the time series corresponding to medoids in target dataset
         self.centers_dict = ts_from_locs(self.locations_dict,
                                          self.R_target)
-        self.map_mean_diff()
-
-        self.R_target_df = wf._make_df('R_age')
 
         # initialise main figure
         self.fig = plt.figure()
