@@ -6,20 +6,34 @@ from matplotlib.colors import Normalize
 
 
 class MultiSliceViewer:
+    """A class that takes in a data array with one time dimension and 2 or 3
+    spatial dimensions, and allows the user  to visualize the data as slices,
+    navigating with the arrow keys (left-right for time, up-down for z axis).
+    Pressing the x, y, z keys will change the cross-section to be perpendicular
+    to the selected axis.
+    """
 
     def __init__(self, volume, title=None, colorbar=True, legend=False,
                  cmap='rainbow', fig=None):
         # if data has only 3 dimensions; assume it is missing the depth axis
-        # reshape into 4D array with single depth level
+        # and reshape into 4D array with single depth level
         if len(volume.shape) == 3:
             t, y, x = volume.shape
             volume = np.reshape(volume, (t, 1, y, x))
 
-        # init class attributes
+        # save the data volume as class attribute
         self.volume = volume
-        self.surface_slices = volume[:, 0]
+
+        # start at time 0, depth 0
         self.index = [0, 0]
+
+        # note the colormap for subsequent plotting
         self.cmap = cmap
+
+        # take note of the surface slice at each time step.
+        # we will need this when changing perspective because as we rotate
+        # the axes of the data volume, we lose track of where the surface is
+        self.surface_slices = volume[:, 0]
 
         # ensure colors span whole data range, not just initial slice
         self.norm = Normalize(
@@ -29,27 +43,29 @@ class MultiSliceViewer:
         # the viewer can create a new figure or use an already existing figure
         self.fig = fig if fig else plt.figure()
 
-        # initialise main plot and helper plot
-        self.init_main_ax(colorbar, legend)
-        self.init_helper_ax()
+        # initialise explorer plot and locator plot
+        self.init_explorer_ax(colorbar, legend)
+        self.init_locator_ax()
 
         # initialise view perpendicular to z
         self.set_view('z')
 
-        # tell figure to wait for key events
-        # save the callback id (cid) so it doesn't get garbage collected
-        self.keypress_cid = self.fig.canvas.mpl_connect('key_press_event',
-                                                        self.process_key)
         # put a title at the top of the whole figure
         if title is not None:
             self.fig.suptitle(title)
 
-    def init_main_ax(self, colorbar, legend):
-        # create the main plot Axes
-        self.main_ax = self.fig.add_subplot(121)
+        # tell figure to wait for key press events,
+        # saving the callback id (cid) so it doesn't get garbage collected
+        self.keypress_cid = self.fig.canvas.mpl_connect('key_press_event',
+                                                        self.process_key)
 
-        # show the volume slice specified by self.index
-        self.main_ax_image = self.main_ax.imshow(
+    def init_explorer_ax(self, colorbar, legend):
+        # create the explorer plot Axes on the left
+        self.explorer_ax = self.fig.add_subplot(121)
+
+        # show the volume slice specified by self.index,
+        # this is [time, depth] for now
+        self.explorer_ax_image = self.explorer_ax.imshow(
             self.volume[
                 self.index[0],
                 self.index[1]
@@ -59,19 +75,22 @@ class MultiSliceViewer:
             origin='lower'
         )
 
-        # optionally create inset axes to put the colorbar in
+        # optionally create inset axes to put the colorbar in.
         # this stops the layout going haywire for more complex arrangements
         if colorbar:
-            cax = self.main_ax.inset_axes([1.04, 0, 0.05, 1])
-            self.fig.colorbar(self.main_ax_image, ax=self.main_ax, cax=cax)
+            cax = self.explorer_ax.inset_axes([1.04, 0, 0.05, 1])
+            # the colorbar ranges over the values shown in the data explorer,
+            # not on the locator map
+            self.fig.colorbar(self.explorer_ax_image,
+                              ax=self.explorer_ax, cax=cax)
 
         # optionally put on a legend (use with categorical data only!)
         if legend:
             # get the unique categories in our array
             values = np.unique(self.volume.ravel())
 
-            # get a shorthand reference to the image on the main plot
-            im = self.main_ax_image
+            # get a shorthand reference to the image on the explorer plot
+            im = self.explorer_ax_image
 
             # transform the values into colors according to colormap
             colors = [im.cmap(im.norm(value)) for value in values]
@@ -81,17 +100,17 @@ class MultiSliceViewer:
                                       label="{l}".format(l=values[i]))
                        for i in range(len(values))]
             # put those patches as legend-handles into the legend
-            self.main_ax.legend(handles=patches,
-                                bbox_to_anchor=(-0.25, 0.5),
-                                loc="center left")
+            self.explorer_ax.legend(handles=patches,
+                                    bbox_to_anchor=(-0.25, 0.5),
+                                    loc="center left")
 
-    def init_helper_ax(self):
+    def init_locator_ax(self):
 
-        # create the helper plot
-        self.helper_ax = self.fig.add_subplot(122)
+        # create the locator plot
+        self.locator_ax = self.fig.add_subplot(122)
 
-        # initialise the surface slice as the helper image
-        self.helper_ax_image = self.helper_ax.imshow(
+        # initialise the surface slice as the locator image
+        self.locator_ax_image = self.locator_ax.imshow(
             self.surface_slices[self.index[0]],
             origin='lower',
             cmap=self.cmap,
@@ -130,7 +149,7 @@ class MultiSliceViewer:
             'y': 'upper',
             'z': 'lower'
         }
-        self.main_ax_image.origin = origin_dict[view]
+        self.explorer_ax_image.origin = origin_dict[view]
 
         # assign the new view to the figure to be used when updating info text
         self.view = view
@@ -139,7 +158,8 @@ class MultiSliceViewer:
         self.change_slice(1, -self.index[1])
 
     def process_key(self, event):
-        # define action to execute when certain keys are pressed
+        # define actions to execute when certain keys are pressed
+        # arrow keys to navigate time (left/right) and space (up/down)
         if event.key == 'left':
             self.change_slice(0, -1)
         if event.key == 'right':
@@ -148,6 +168,7 @@ class MultiSliceViewer:
             self.change_slice(1, 1)
         if event.key == 'down':
             self.change_slice(1, -1)
+        # keys x, y, z to change cross-section direction
         if event.key == 'x':
             self.set_view('x')
         if event.key == 'y':
@@ -158,24 +179,24 @@ class MultiSliceViewer:
         # update the plot
         self.fig.canvas.draw()
 
-    def update_main_ax_title(self):
-        # change the title of the main plot to reflect the current time slice
+    def update_explorer_ax_title(self):
+        # change the title of the explorer plot to reflect current time slice
         # and the space slice for the current view
         time_step, depth_step = self.index
         max_time_steps, max_depth_steps, _, _ = self.volume.shape
-        self.main_ax.title.set_text(f"time: "
-                                    f"{time_step+1}/{max_time_steps}; "
-                                    f"{self.view}: "
-                                    f"{depth_step+1}/{max_depth_steps}"
-                                    )
+        self.explorer_ax.title.set_text(f"time: "
+                                        f"{time_step+1}/{max_time_steps}; "
+                                        f"{self.view}: "
+                                        f"{depth_step+1}/{max_depth_steps}"
+                                        )
 
     def change_slice(self, dimension, amount):
         # increment index (wrap around with modulo)
         self.index[dimension] += amount
         self.index[dimension] %= self.volume.shape[dimension]
 
-        # set the current slice on the main plot based on the new index
-        self.main_ax_image.set_data(
+        # set the current slice on the explorer plot based on the new index
+        self.explorer_ax_image.set_data(
             self.volume[
                 self.index[0],
                 self.index[1]
@@ -183,18 +204,18 @@ class MultiSliceViewer:
         )
 
         # also update the surface view if time changed
-        self.helper_ax_image.set_data(self.surface_slices[self.index[0]])
+        self.locator_ax_image.set_data(self.surface_slices[self.index[0]])
 
-        # and the title on the main plot to reflect new time/depth step
-        self.update_main_ax_title()
+        # and the title on the explorer plot to reflect new time/depth step
+        self.update_explorer_ax_title()
 
-        # and the line on the helper plot to show new slice location
+        # and the line on the locator plot to show new slice location
         self.update_slice_locator()
 
     def update_slice_locator(self):
         # remove previous line if exists
         try:
-            for handle in self.helper_line:
+            for handle in self.locator_line:
                 handle.remove()
         except (AttributeError, ValueError):
             pass
@@ -202,16 +223,16 @@ class MultiSliceViewer:
         # slice locator in current implementation only makes sense for x/y view
         if(self.view != 'z'):
             # figure out where to put the locator line
-            helper_line_x = [self.index[1], self.index[1]]
-            helper_line_y = [0, self.volume.shape[3]]
+            locator_line_x = [self.index[1], self.index[1]]
+            locator_line_y = [0, self.volume.shape[3]]
 
             # just a trick to make the line horizontal for y view
             if(self.view == 'y'):
-                helper_line_x, helper_line_y = helper_line_y, helper_line_x
+                locator_line_x, locator_line_y = locator_line_y, locator_line_x
 
-            # actually plot the slice locator line on the helper plot
-            self.helper_line = self.helper_ax.plot(
-                helper_line_x,
-                helper_line_y,
+            # actually plot the slice locator line on the locator plot
+            self.locator_line = self.locator_ax.plot(
+                locator_line_x,
+                locator_line_y,
                 color='black'
             )
