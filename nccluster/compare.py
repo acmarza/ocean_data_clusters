@@ -243,8 +243,6 @@ class DdR_Histogram:
         # note the time series corresponding to medoids in target dataset
         self.centers_dict = ts_from_locs(self.locations_dict,
                                          self.R_target)
-        self.map_all_cosines()
-
         # initialise main figure
         self.fig = plt.figure()
 
