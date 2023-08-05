@@ -63,24 +63,26 @@ class MultiSliceViewer:
         # create the explorer plot Axes on the left
         self.explorer_ax = self.fig.add_subplot(121)
 
-        # show the volume slice specified by self.index,
-        # this is [time, depth] for now
+        # show the volume slice specified by self.index;
+        # the index takes the form [time, depth] right after initialization.
         self.explorer_ax_image = self.explorer_ax.imshow(
             self.volume[
                 self.index[0],
                 self.index[1]
             ],
+            # remember we've set the colormap and norm based on the input data
             cmap=self.cmap,
             norm=self.norm,
+            # prevents map showing upside down with our axes convention
             origin='lower'
         )
 
-        # optionally create inset axes to put the colorbar in.
-        # this stops the layout going haywire for more complex arrangements
+        # optional colorbar
         if colorbar:
+            # create inset axes to put the colorbar in.
             cax = self.explorer_ax.inset_axes([1.04, 0, 0.05, 1])
-            # the colorbar ranges over the values shown in the data explorer,
-            # not on the locator map
+            # by specifying the explorer_ax_image as ScalarMappable to pass
+            # to colorbar, we ensure the colorbar range matches the data
             self.fig.colorbar(self.explorer_ax_image,
                               ax=self.explorer_ax, cax=cax)
 
@@ -105,11 +107,11 @@ class MultiSliceViewer:
                                     loc="center left")
 
     def init_locator_ax(self):
-
-        # create the locator plot
+        # create the locator plot on the right
         self.locator_ax = self.fig.add_subplot(122)
 
-        # initialise the surface slice as the locator image
+        # initialise the surface slice at the current time step
+        # as the locator image
         self.locator_ax_image = self.locator_ax.imshow(
             self.surface_slices[self.index[0]],
             origin='lower',
@@ -158,7 +160,7 @@ class MultiSliceViewer:
         self.change_slice(1, -self.index[1])
 
     def process_key(self, event):
-        # define actions to execute when certain keys are pressed
+        # define actions to execute when certain keys are pressed.
         # arrow keys to navigate time (left/right) and space (up/down)
         if event.key == 'left':
             self.change_slice(0, -1)
@@ -181,7 +183,7 @@ class MultiSliceViewer:
 
     def update_explorer_ax_title(self):
         # change the title of the explorer plot to reflect current time slice
-        # and the space slice for the current view
+        # and the space slice and the current view direction
         time_step, depth_step = self.index
         max_time_steps, max_depth_steps, _, _ = self.volume.shape
         self.explorer_ax.title.set_text(f"time: "
