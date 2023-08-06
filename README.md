@@ -10,7 +10,6 @@ Find clusters in ocean data using unsupervised machine learning. Could be used w
 ```
 git clone https://gitlab.com/earth15/ocean_data_clusters.git
 cd ocean_data_clusters
-
 ```
 2. Create a conda environment from the file provided:
 ```
@@ -21,29 +20,19 @@ conda env create -f environment.yml
 conda activate nccluster
 ```
 ### 2. Docker
-1. Clone the repository:
+1. Download the docker image:
 ```
-git clone https://gitlab.com/earth15/ocean_data_clusters.git
-cd ocean_data_clusters
-
-```
-2. Build the docker image (~ several minutes):
-```
-docker build -t nccluster .  
+docker pull anamarza/nccluster
 ```
 3. Have your config and data folders ready; note their paths.
 4. Start up the container:
 ```
-docker run -id -p 5901:5901 --name nccluster --mount type=bind,source=/some/path/to/configs,target=/app/configs  --mount type=bind,source=/some/path/to/data,target=/app/ocean_data nccluster
+docker run -id -p 5901:5901 --name nccluster --mount type=bind,source=/some/path/to/configs,target=/app/configs  --mount type=bind,source=/some/path/to/data,target=/app/ocean_data anamarza/nccluster
 ```
 5. Use your preferred VNC viewer to connect to the container at address localhost:5901, for example:
 ```
 vncviewer localhost:5901
 ```
-6. Stop and remove the container:
-```
-docker container stop nccluster && docker container rm nccluster
-``` 
 ## Usage
 Instructions out of date! Not guaranteed to work.
 Edit the example configuration file in folder 'configs' as needed (see explanations therein). 
