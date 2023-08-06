@@ -1,28 +1,49 @@
 
 # Ocean Data Clusters
 
-A collection of python scripts that use unsupervised machine learning techniques to define clusters in ocean data (but could be used with other netCDF data with 2 or 3 spatial dimensions and a time dimension).
+Find clusters in ocean data using unsupervised machine learning. Could be used with similar netCDF data that have 2 or 3 spatial dimensions and a time dimension.
 
-## Installation
+## Setup
+### 1. Python + Conda
 
-Clone the repository:
+1. Clone the repository:
 ```
 git clone https://gitlab.com/earth15/ocean_data_clusters.git
 cd ocean_data_clusters
 
 ```
-Create a conda environment from the file provided, with all the required python modules:
+2. Create a conda environment from the file provided:
 ```
 conda env create -f environment.yml
 ```
-Alternatively create a new conda environment and install the required python packages (and good luck solving conflicts):
-```
-conda create -n nccluster -c conda-forge matplotlib-venn nctoolkit sktime tqdm tslearn xesmf
-```
-Activate the environment:
+3. Activate the environment:
 ```
 conda activate nccluster
 ```
+### 2. Docker
+1. Clone the repository:
+```
+git clone https://gitlab.com/earth15/ocean_data_clusters.git
+cd ocean_data_clusters
+
+```
+2. Build the docker image (~ several minutes):
+```
+docker build -t nccluster .  
+```
+3. Have your config and data folders ready; note their paths.
+4. Start up the container:
+```
+docker run -id -p 5901:5901 --name nccluster --mount type=bind,source=/some/path/to/configs,target=/app/configs  --mount type=bind,source=/some/path/to/data,target=/app/ocean_data nccluster
+```
+5. Use your preferred VNC viewer to connect to the container at address localhost:5901, for example:
+```
+vncviewer localhost:5901
+```
+6. Stop and remove the container:
+```
+docker container stop nccluster && docker container rm nccluster
+``` 
 ## Usage
 Instructions out of date! Not guaranteed to work.
 Edit the example configuration file in folder 'configs' as needed (see explanations therein). 
