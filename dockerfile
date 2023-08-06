@@ -3,6 +3,9 @@ FROM continuumio/miniconda3
 # set working directory
 WORKDIR /app
 
+# update conda
+RUN conda update -n base -c defaults conda
+
 # create the conda environment
 COPY environment.yml .
 RUN conda env create -f environment.yml 
@@ -20,12 +23,14 @@ COPY examples /app/examples
 RUN mkdir configs
 RUN mkdir data
 
-# install packages for graphics
-RUN apt-get update -y && apt-get install -y tigervnc-standalone-server tk
+# update packages
+RUN apt-get update -y && apt-get upgrade -y
+
+# install graphics packages
+RUN apt-get install -y tigervnc-standalone-server tk
 
 # forward vnc port
 EXPOSE 5901
 
 # start vncserver
 ENTRYPOINT tigervncserver -localhost no -SecurityTypes None --I-KNOW-THIS-IS-INSECURE && /bin/bash
-
