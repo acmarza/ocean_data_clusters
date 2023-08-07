@@ -6,33 +6,74 @@ from sktime.clustering.metrics import medoids
 
 
 def make_subclusters_map(labels, sublabels):
+    # taking a 2D array of labels and a 2D array of sublabels,
+    # assign to each pixel an appropriate color
+
+    # initialize an empty 2D array the same shape as the labels
     subclust_map = np.full_like(labels, np.nan)
+
+    # figure out how many subclusters in each cluster
     subclust_sizes = make_subclust_sizes(labels, sublabels)
+
+    # for every not-nan pixel on the map,
     for (yi, xi) in np.argwhere(~np.isnan(labels)):
+
+        # extract its label and sublabel
         label = labels[yi, xi]
         sublabel = sublabels[yi, xi]
+
+        # note the number of subclusters in the current cluster
         size = subclust_sizes[int(label)]
+
+        # pass these data to a wrapper function that gives us the color
         subclust_map[yi, xi] = get_sublabel_colorval(label, sublabel, size)
+
     return subclust_map
 
 
 def make_subclust_sizes(labels, sublabels):
+
+    # figure out how many clusters there are
     n_clusters = int(np.nanmax(labels)) + 1
+
+    # initialize empty array that will tell us the size of each cluster
     subclust_sizes = []
+
+    # for each cluster,
     for label in range(n_clusters):
+
+        # figure out how many subclusters it contains
         subclust_size = np.nanmax(sublabels[labels == label])
-        subclust_sizes.append(int(subclust_size)+1)
+
+        # and add that to the list
+        subclust_sizes.append(int(subclust_size) + 1)
+
     return subclust_sizes
 
 
 def get_sublabel_colorval(label, sublabel, subclust_size):
+
+    # remember the labels are integers,
+    # e.g. red = 0, orange = 1, yellow = 2 depending on the colormap
+
+    # spread out the color values over a decently-sized interval;
+    # smaller interval translates to subcluster colors that are
+    # harder to tell apart from each other;
+    # bigger interval helps distinguish subclusters, but
+    # smears the boundaries between clusters
     interval = 0.5
+
+    # calculate where in this interval the sublabel falls,
+    # where 0 is the first sublabel and the interval max is the last sublabel
     offset = sublabel * (interval / (subclust_size - 1))
-    colorval = label - interval/2 + offset
+
+    # set the color value in an interval centered on the label's integer value
+    colorval = label - interval / 2 + offset
     return colorval
 
 
 def show_map(map, cmap='viridis'):
+    # simple  wrapper to show a map in the correct orientation with given cmap
     plt.figure()
     plt.imshow(map, origin='lower', cmap=cmap)
     plt.show()
