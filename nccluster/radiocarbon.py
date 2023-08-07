@@ -15,7 +15,8 @@ class RadioCarbonWorkflow(Workflow):
         print("[i] Preprocessing data")
         self.__rename_vars(['dc14', 'dic', 'di14c'])
 
-        # compute dc14 if not present in dataset and we have the necessary vars
+        # compute dc14 if not present in dataset
+        # and provided we have the necessary vars
         if 'dic' in self._ds.variables and\
                 'di14c' in self._ds.variables and\
                 'dc14' not in self._ds.variables:
@@ -78,4 +79,5 @@ class RadioCarbonWorkflow(Workflow):
         print("[i] Computed dc14 from di14c and dic")
 
     def _setters(self):
+        # will make use of this array often enough that it's worth saving
         self._age_array = self.ds_var_to_array('R_age')
