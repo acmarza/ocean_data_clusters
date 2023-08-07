@@ -8,32 +8,40 @@ from nccluster.multisliceviewer import MultiSliceViewer
 class Workflow:
     '''Base class for defining a workflow that operates on a netCDF dataset'''
     def __init__(self, config_path):
-        # save the config_path as an attribute, read config and
-        # be ready to save config changes  when script exits
+        # save the config_path as an attribute
         self.config_path = config_path
+
+        # read the config file
         self.__read_config_file()
+
+        # be ready to save config changes  when script exits
         atexit.register(self.__offer_save_config)
+
+        # apply data set operations as soon as invoked
         nc.options(lazy=False)
 
-        # make sure all required fields are defined in the config
-        # before loading the data from file and applying any preprocessing
+        # check that all the required fields are defined in the config
         self._checkers()
+
+        # load the data from file
         self.__load_ds()
+
+        # run preprocessing routines if defined
         self._preprocess_ds()
 
         # initialise any other required attributes
         self._setters()
 
     def __read_config_file(self):
-        # parse config file
         self.config = configparser.ConfigParser()
         self.config.read(self.config_path)
         print(f"[i] Using config: {self.config_path}")
 
     def __offer_save_config(self):
-        # will only ask to save if a new options is added to config that's
-        # not already in the config file
-        # first read in the original config again
+        # will only ask to save if a new option is provided interactively
+        # that is not already in the config file
+
+        # first read in the original config again for comparison
         original_config = configparser.ConfigParser()
         original_config.read(self.config_path)
 
@@ -60,7 +68,7 @@ unsaved changes to {self.config_path}.")
         # convenience function to check if an option is defined in the config;
         # if not, interactively get its value and add to config
         try:
-            # don't attempt to read from config if option is forced
+            # don't attempt to read from config if option is forced, instead
             # move straight to except block where default should be applied
             if force:
                 raise KeyError
@@ -71,28 +79,26 @@ unsaved changes to {self.config_path}.")
             if not required:
                 return
 
-            # apply default or ask user to input a value
+            # if required, apply default or ask user to input a value
             if default is not None:
                 value = default
-
             else:
-                # ask the user for the value
                 print(missing_msg)
                 value = input(input_msg)
 
-                # for bools expect a y/n answer
+                # for boolean options, True if answer is yes, False otherwise
                 if isbool:
                     value = (value.lower() == 'y')
 
-            # may need to create a new section
+            # may need to create a new section if not already in config
             if not self.config.has_section(section):
                 self.config.add_section(section)
 
+            # set the option we've just read in, as string
             value = str(value)
-            # set the option we've just read in
             self.config[section][option] = value
 
-        # either way echo the value to the user for sanity checking
+        # either way echo the value to the user for double-checking
         print(confirm_msg + value)
 
     def __check_nc_files(self):
@@ -167,12 +173,13 @@ unsaved changes to {self.config_path}.")
         self.__check_timesteps_subset()
 
     def _setters(self):
+        # override this in children, setting extra attributes
         print("[i] All attributes have been initialized")
 
     def regrid_to_ds(self, target_ds):
         # interpolate/extrapolate the data to fit the grid of a target dataset
         self._ds.regrid(target_ds)
-        # features and time series need to be re-created for new grid
+        # extra attributes need to be re-created for new grid
         self._setters()
 
     def run(self):
@@ -193,15 +200,13 @@ unsaved changes to {self.config_path}.")
                 long_name = df.loc[df['variable'] == var].long_name.values[0]
                 print(f"{i}. {var}\n\t{long_name}")
             except Exception:
-                # just print the variable name
+                # just print the short variable name
                 print(f"{i}. {var}")
 
     def plot_var(self, var_to_plot):
         try:
-            # get the data as an array
-            ds_tmp = self._ds.copy()
-            ds_tmp.subset(variables=var_to_plot)
-            var_xr = ds_tmp.to_xarray()
+            # get the data associated with the specified variable as an array
+            var_xr = self.ds_var_to_xarray(var_to_plot)
             data_to_plot = var_xr[var_to_plot].values
 
             try:
@@ -220,16 +225,26 @@ unsaved changes to {self.config_path}.")
             print(f"[!] {var_to_plot} not found; check spelling")
 
     def ds_var_to_array(self, var_name):
-        # some  manipulation to isolate age data and cast it into a useful form
-        # make a copy of the original dataset to subset to one variable
-        ds_tmp = self._ds.copy()
-        ds_tmp.subset(variables=var_name)
 
-        # convert to xarray and extract the numpy array of values
-        as_xr = ds_tmp.to_xarray()
+        # obtain xarray first
+        as_xr = self.ds_var_to_xarray(var_name)
+
+        # extract just the data values
         as_array = as_xr[var_name].values
 
         return as_array
+
+    def ds_var_to_xarray(self, var_name):
+        # temporary copy of the dataset
+        ds_tmp = self._ds.copy()
+
+        # subset temporary data set to just the variable of interest
+        ds_tmp.subset(variables=var_name)
+
+        # convert to xarray
+        as_xr = ds_tmp.to_xarray()
+
+        return as_xr
 
     def interactive_var_plot(self):
         try:
