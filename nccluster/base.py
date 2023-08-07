@@ -135,7 +135,7 @@ unsaved changes to {self.config_path}.")
 
         # get a list of file paths and create the DataSet object
         nc_files = self.config['default']['nc_files'].split(",")
-        self._ds = nc.DataSet(nc_files)
+        self._ds = nc.open_data(nc_files)
 
     def _preprocess_ds(self):
         # optionally limit analysis to a subset of variables
