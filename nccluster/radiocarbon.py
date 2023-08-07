@@ -5,14 +5,15 @@ from nccluster.base import Workflow
 class RadioCarbonWorkflow(Workflow):
     '''Base for workflows involving dc14 and radiocarbon age calculations.'''
     def _preprocess_ds(self):
+        # first call the parent's preprocessing function
+        super()._preprocess_ds()
+
         # for computing radiocarbon ages, will use nctoolkit's DataSet.assign,
         # however this will require knowing the variable names in advance;
         # to avoid confusion, rename the variables used in this computation
         # to something simple and consistent
-        super()._preprocess_ds()
         print("[i] Preprocessing data")
-        self.__construct_rename_dict(['dc14', 'dic', 'di14c'])
-        self.__rename_vars()
+        self.__rename_vars(['dc14', 'dic', 'di14c'])
 
         # compute dc14 if not present in dataset and we have the necessary vars
         if 'dic' in self._ds.variables and\
@@ -20,27 +21,27 @@ class RadioCarbonWorkflow(Workflow):
                 'dc14' not in self._ds.variables:
             self.__compute_dc14()
 
-        # compute radiocarbon ages if dc14 exists in dataset
-        if 'dc14' in self._ds.variables:
-            self.__check_mean_radiocarbon_lifetime()
-            self.__check_atm_dc14()
-            self.__compute_R_age()
+        # verify we have the other required data and compute R-age
+        self.__check_mean_radiocarbon_lifetime()
+        self.__check_atm_dc14()
+        self.__compute_R_age()
 
-    def __construct_rename_dict(self, vars):
-        # get the name of each variable as it appears in the dataset
-        self.__rename_dict = {}
+    def __rename_vars(self, vars):
+        # initialize empty dictionary
+        rename_dict = {}
+
+        # for each variable that needs renaming, note its original name
         for var in vars:
             try:
-                # try to read from config
-                self.__rename_dict[var] = self.config['radiocarbon'][var]
+                # try to read original name from config
+                rename_dict[var] = self.config['radiocarbon'][var]
             except KeyError:
                 # if option not defined, assume user does not need it
                 # and continue without asking
                 pass
 
-    def __rename_vars(self):
         # rename variables to be used in calculations for easy reference
-        for key, value in self.__rename_dict.items():
+        for key, value in rename_dict.items():
             self._ds.rename({value: key})
             print(f"[i] Renamed variable {value} to {key}")
 
