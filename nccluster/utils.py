@@ -300,28 +300,38 @@ def reorder_labels(labels, ts_array):
     # prepare an empty array to hold the average variance of each cluster
     order_scores = np.zeros(n_clusters)
 
-    if len(ts_array) > len(labels.flatten()):
-        # drop nan-only rows
-        mask = np.all(np.isnan(ts_array), axis=1)
-        ts_array = ts_array[~mask]
-    for label in range(0, n_clusters):
-        # assume at this point self.mask is still set for this cluster
-        # so can grab the timeseries array right away
-        # and zip it with the labels
+    # drop nan-only time series for which we don't have labels
+    mask = np.all(np.isnan(ts_array), axis=1)
+    ts_array = ts_array[~mask]
 
-        # the zip above lets us this neat list comprehension
-        # to retrieve just the time series with the current label
+    # loop over clusters
+    for label in range(0, n_clusters):
+
+        # connect each time series with its label
         all_tss_labeled = zip(ts_array, labels.flatten())
+
+        # extract the time series corresponding to the current cluster
         cluster_tss = [ts for (ts, ll) in all_tss_labeled if ll == label]
 
+        # computer the average value of the time series in this cluster
+        # call it a score because we will use this to rank the clusters
         order_scores[label] = np.mean(np.array(cluster_tss))
 
+    # obtain the indices that sort the list of scores
     idx = np.argsort(order_scores)
+
+    # the original order is just 0 1 2 ... (n_clusters - 1)
     orig = np.arange(n_clusters)
+
+    # define the mapping from the original order to the score-based  order
     mapping = dict(zip(idx, orig))
 
+    # make a copy of the labels that we are free to shuffle around
     ordered_labels = np.copy(labels)
+
+    # for each correspondence defined in the mapping,
     for key in mapping:
+        # renumber the labels according to the mapping
         ordered_labels[labels == key] = mapping[key]
 
     return ordered_labels
