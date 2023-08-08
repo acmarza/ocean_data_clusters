@@ -34,7 +34,7 @@ def make_subclusters_map(labels, sublabels):
 def make_subclust_sizes(labels, sublabels):
 
     # figure out how many clusters there are
-    n_clusters = int(np.nanmax(labels)) + 1
+    n_clusters = count_clusters(labels)
 
     # initialize empty array that will tell us the size of each cluster
     subclust_sizes = []
@@ -42,11 +42,8 @@ def make_subclust_sizes(labels, sublabels):
     # for each cluster,
     for label in range(n_clusters):
 
-        # figure out how many subclusters it contains
-        subclust_size = np.nanmax(sublabels[labels == label])
-
-        # and add that to the list
-        subclust_sizes.append(int(subclust_size) + 1)
+        # figure out how many subclusters it contains and add that to the list
+        subclust_sizes.append(count_clusters(sublabels[labels == label]))
 
     return subclust_sizes
 
@@ -99,7 +96,7 @@ def construct_centers(labels, sublabels, ts_array, func, **kwargs):
     centers_dict = {'clusters': [], 'subclusters': []}
 
     # loops over labels
-    for label in range(int(np.nanmax(labels)) + 1):
+    for label in range(count_clusters(labels)):
 
         # a binary mask that is true over the current cluster
         label_match_cond = labels == label
@@ -295,7 +292,7 @@ def make_xy_coords(ds):
 def reorder_labels(labels, ts_array):
 
     # calculate the number of clusters
-    n_clusters = int(np.nanmax(labels) + 1)
+    n_clusters = count_clusters(labels)
 
     # prepare an empty array to hold the average variance of each cluster
     order_scores = np.zeros(n_clusters)
@@ -335,3 +332,7 @@ def reorder_labels(labels, ts_array):
         ordered_labels[labels == key] = mapping[key]
 
     return ordered_labels
+
+
+def count_clusters(labels):
+    return int(np.nanmax(labels)) + 1
