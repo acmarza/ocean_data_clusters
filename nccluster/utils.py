@@ -79,38 +79,18 @@ def show_map(map, cmap='viridis'):
     plt.show()
 
 
-def construct_barycenters(labels, sublabels, ts):
-    # flatten the labels arrays and remove nan entries
-    labels, sublabels = map(lambda arr: arr[~np.isnan(arr)].flatten(),
-                            [labels, sublabels])
-
-    # array of sizes of each cluster
-    subclust_sizes = make_subclust_sizes(labels, sublabels)
-
-    # initialize dictionary with two arrays
-    centers_dict = {}
-    centers_dict['clusters'] = []
-    centers_dict['subclusters'] = []
-
-    # loop over clusters
-    for label in range(int(np.nanmax(labels)) + 1):
-
-        label_match_cond = labels == label
-        cluster_tss = ts[label_match_cond]
-        cluster_center = euclidean_barycenter(cluster_tss)
-        centers_dict['clusters'].append(cluster_center)
-        subcluster_centers = []
-        for sublabel in range(subclust_sizes[int(label)]):
-            subclust_match_cond = sublabels == sublabel
-            subclust_tss = ts[label_match_cond & subclust_match_cond]
-            subclust_center = euclidean_barycenter(subclust_tss)
-            subcluster_centers.append(subclust_center)
-        centers_dict['subclusters'].append(subcluster_centers)
-
-    return centers_dict
+def construct_barycenters(labels, sublabels, ts_array):
+    return construct_centers(labels, sublabels, ts_array, euclidean_barycenter)
 
 
 def construct_medoids(labels, sublabels, ts_array):
+
+    return construct_centers(labels, sublabels, ts_array, medoids,
+                             distance_metric="euclidean"
+                             )
+
+
+def construct_centers(labels, sublabels, ts_array, func, **kwargs):
 
     # array of cluster sizes
     subclust_sizes = make_subclust_sizes(labels, sublabels)
@@ -135,13 +115,12 @@ def construct_medoids(labels, sublabels, ts_array):
         cluster_tss = cluster_tss[~mask]
 
         # locate the medoid among the valid time series in this cluster
-        cluster_center = medoids(cluster_tss,
-                                 distance_metric='euclidean')
+        cluster_center = func(cluster_tss, **kwargs)
 
         # if np.isnan(cluster_center).all():
         #    print('[debug] all nan cluster center')
 
-        # add the cluster medoid to the dictionary
+        # add the cluster center to the dictionary
         centers_dict['clusters'].append(cluster_center)
 
         # initialize empty array
@@ -160,17 +139,16 @@ def construct_medoids(labels, sublabels, ts_array):
             mask = np.all(np.isnan(subclust_tss), axis=1)
             subclust_tss = subclust_tss[~mask]
 
-            # locate the medoid among the valid time series in this subcluster
-            subclust_center = medoids(subclust_tss,
-                                      distance_metric='euclidean')
+            # locate the cener  among the valid time series in this subcluster
+            subclust_center = func(subclust_tss, **kwargs)
 
             # if np.isnan(subclust_center).all():
             #    print('[debug] all nan subcluster center')
 
-            # add the subcluster medoid to the list for this cluster
+            # add the subcluster center to the list for this cluster
             subcluster_centers.append(subclust_center)
 
-        # add the list for this cluster to the nested list of subclust medoids
+        # add the list for this cluster to the nested list of subclust centers
         centers_dict['subclusters'].append(subcluster_centers)
 
     return centers_dict
