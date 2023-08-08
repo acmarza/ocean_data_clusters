@@ -230,41 +230,76 @@ def locate_centers(labels, sublabels, data_array, func):
 
 
 def ts_from_locs(locations_dict, data_array):
+    """Given the locations of cluster and subcluster centers, and a data array,
+    retrieve the time series corresponding to the given locations.  """
+
+    # initialize empty dictionary
     centers_dict = {'clusters': [], 'subclusters': []}
+
+    # reshape data from (t, y, x) to (y, x, t)
     ts_array = np.moveaxis(data_array, 0, -1)
+
+    # loop over cluster center locations
     for cluster_loc in locations_dict['clusters']:
+
+        # extract the coordinates
         cluster_loc = tuple(cluster_loc)
+
+        # save the time series of the cluster center to dictionary
         centers_dict['clusters'].append(ts_array[cluster_loc])
+
+    # loop over clusters of subclusters
     for subcluster_locs in locations_dict['subclusters']:
+
+        # initialize empty list
         subclust_centers = []
+
+        # loop over subcluster center locations in current cluster
         for subclust_loc in subcluster_locs:
+
+            # extract the center location for current subcluster
             subclust_loc = tuple(subclust_loc)
+
+            # append the subcluster center time series to array
             subclust_centers.append(ts_array[subclust_loc])
+
+        # append the time series of the subcluster centers in the current
+        # cluster to dictionary
         centers_dict['subclusters'].append(subclust_centers)
+
     return centers_dict
 
 
 def make_xy_coords(ds):
-    # copy the coords of the original dataset, but keep only x and y
+    # copy the coords of the original dataset
     all_coords = ds.to_xarray().coords
+
+    # initialize new empty coordinate list
     coords = {}
+
+    # loop over original coordinates
     for key in all_coords:
         try:
+            # put only x and y in the new dictionary
             if all_coords[key].axis in ('X', 'Y'):
                 coords[key] = all_coords[key]
         except AttributeError:
             pass
-    # arcane magic to put the coordinates in reverse order
+    # need to put the coordinates in reverse order
     # because otherwise DataArray expects the transpose of what we have
     coords = dict(reversed(list(coords.items())))
+
     return coords
 
 
 def reorder_labels(labels, ts_array):
 
-    # prepare an empty array to hold the average variance of each cluster
+    # calculate the number of clusters
     n_clusters = int(np.nanmax(labels) + 1)
+
+    # prepare an empty array to hold the average variance of each cluster
     order_scores = np.zeros(n_clusters)
+
     if len(ts_array) > len(labels.flatten()):
         # drop nan-only rows
         mask = np.all(np.isnan(ts_array), axis=1)
