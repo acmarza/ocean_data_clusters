@@ -96,9 +96,7 @@ def construct_centers(labels, sublabels, ts_array, func, **kwargs):
     subclust_sizes = make_subclust_sizes(labels, sublabels)
 
     # dictionary containing two arrays
-    centers_dict = {}
-    centers_dict['clusters'] = []
-    centers_dict['subclusters'] = []
+    centers_dict = {'clusters': [], 'subclusters': []}
 
     # loops over labels
     for label in range(int(np.nanmax(labels)) + 1):
@@ -156,32 +154,73 @@ def construct_centers(labels, sublabels, ts_array, func, **kwargs):
 
 def locate_medoids(labels, sublabels, data_array):
 
+    # shorthand
     t, y, x = data_array.shape
+
+    # reshape data array from (t, y, x) to (y, x, t)
     ts_array = np.moveaxis(data_array, 0, -1)
+
+    # get the medoids
     centers_dict = construct_medoids(labels, sublabels, ts_array)
 
+    # the number of time series
     n_ts = y * x
+
+    # reshape time series array again for convenience
     ts_array_flat = np.reshape(ts_array, (n_ts, t))
+
+    # intialize empty dict
     locations_dict = {'clusters': [], 'subclusters': []}
+
+    # loop over the cluster centers
     for i, cluster_ts in enumerate(centers_dict['clusters']):
+
+        # count the time series
         for idx in range(n_ts):
+
+            # get the time series as 1D array
             arr = ts_array_flat[idx]
+
+            # verify if it is the center
             if np.array_equal(cluster_ts, arr):
+
+                # if yes, extract the map location
                 map_idx = np.unravel_index(idx, (y, x))
                 a, b = map_idx
                 map_idx = (int(a), int(b))
+
+                # save the map location
                 locations_dict['clusters'].append(map_idx)
+
+    # loop over the clusters
     for i, subclust_tss in enumerate(centers_dict['subclusters']):
+
+        # initialize empty array
         cluster_locs = []
+
+        # loop over subcluster centers
         for j, subclust_ts in enumerate(subclust_tss):
+
+            # count the time series
             for idx in range(n_ts):
+
+                # get the time series as 1D array
                 arr = ts_array_flat[idx]
+
+                # verify if it is the center
                 if np.array_equal(subclust_ts, arr):
+
+                    # if yes, extract the map location
                     map_idx = np.unravel_index(idx, (y, x))
                     a, b = map_idx
                     map_idx = (int(a), int(b))
+
+                    # save the map location
                     cluster_locs.append(map_idx)
+
+        # nested list of subcluster centers for each cluster
         locations_dict['subclusters'].append(cluster_locs)
+
     return locations_dict
 
 
