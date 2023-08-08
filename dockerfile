@@ -1,6 +1,6 @@
 FROM continuumio/miniconda3
 
-# set working directory
+# set working directory (this is also the mount point for git repo)
 WORKDIR /app
 
 # update conda
@@ -15,22 +15,17 @@ RUN echo "conda activate nccluster" >> ~/.bashrc
 ENV PATH /opt/conda/envs/nccluster/bin:$PATH
 ENV CONDA_DEFAULT_ENV nccluster
 
-# copy over core scripts
-COPY nccluster /app/nccluster
-COPY examples /app/examples
-
-# mount points for config files and netCDF data
-RUN mkdir configs
-RUN mkdir data
+# mount point for data 
+RUN mkdir /data
 
 # update packages
 RUN apt-get update -y && apt-get upgrade -y
 
-# install graphics packages
-RUN apt-get install -y tigervnc-standalone-server tk
+# install required packages
+RUN apt-get install -y git openbox tigervnc-standalone-server tk
 
 # forward vnc port
 EXPOSE 5901
 
 # start vncserver
-ENTRYPOINT tigervncserver -localhost no -SecurityTypes None --I-KNOW-THIS-IS-INSECURE && /bin/bash
+ENTRYPOINT tigervncserver -localhost no -SecurityTypes None --I-KNOW-THIS-IS-INSECURE -geometry 720x480 && /bin/bash
