@@ -154,6 +154,11 @@ def construct_centers(labels, sublabels, ts_array, func, **kwargs):
 
 def locate_medoids(labels, sublabels, data_array):
 
+    return locate_centers(labels, sublabels, data_array, construct_medoids)
+
+
+def locate_centers(labels, sublabels, data_array, func):
+
     # shorthand
     t, y, x = data_array.shape
 
@@ -161,7 +166,7 @@ def locate_medoids(labels, sublabels, data_array):
     ts_array = np.moveaxis(data_array, 0, -1)
 
     # get the medoids
-    centers_dict = construct_medoids(labels, sublabels, ts_array)
+    centers_dict = func(labels, sublabels, ts_array)
 
     # the number of time series
     n_ts = y * x
