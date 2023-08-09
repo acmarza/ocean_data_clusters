@@ -58,9 +58,9 @@ class KMeansWorkflowBase(Workflow):
         )
 
         self.pipe = Pipeline([
-                ("preprocessor", preprocessor),
-                ("clusterer", clusterer)
-            ])
+            ("preprocessor", preprocessor),
+            ("clusterer", clusterer)
+        ])
 
     def __check_n_init(self):
         self._check_config_option(
@@ -185,12 +185,14 @@ class KMeansWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
 
     def _checkers(self):
 
-        super()._checkers()
+        RadioCarbonWorkflow._checkers(self)
+        KMeansWorkflowBase._checkers(self)
         self.__check_palette()
         self.__check_n_clusters()
 
     def _setters(self):
-        super()._setters()
+        RadioCarbonWorkflow._setters(self)
+        KMeansWorkflowBase._setters(self)
         self.__set_n_clusters()
 
     def run(self):
@@ -216,7 +218,7 @@ class KMeansWorkflow(RadioCarbonWorkflow, KMeansWorkflowBase):
             missing_msg="[!] You have not specified n_clusters",
             input_msg="[>] Enter number of clusters to use for k-means: ",
             confirm_msg="[i] Proceeding with n_clusters = "
-            )
+        )
 
     def __set_n_clusters(self):
         # set the number of clusters of the KMeans object
