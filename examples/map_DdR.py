@@ -19,6 +19,8 @@ def main():
 
     mapper = DdR_Maps(args.config, args.original, args.labels)
 
+    mapper.table_cluster_mean_and_std()
+
     print("[i] Map options:\n\
           1. cosines\n\
           2. average ΔR per cluster\n\

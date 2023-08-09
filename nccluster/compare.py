@@ -419,6 +419,26 @@ class DdR_Maps(DdR_Base):
                      label="mean of ΔR distribution (yrs)")
         plt.show()
 
+    def table_cluster_mean_and_std(self):
+        print("benchmark,cluster,subcluster,mean,stddev")
+        n_labels = count_clusters(self.labels)
+        subclust_sizes = make_subclust_sizes(self.labels, self.sublabels)
+        diff_maps = [np.full_like(self.labels, np.nan) for i in range(3)]
+
+        for label in range(n_labels):
+            for sublabel in range(subclust_sizes[label]):
+                mask = self._get_mask(label, sublabel)
+                intrasub_ages = self._get_subcluster_data(mask, self.R_target)
+                for i, (benchmark, diff_map) in enumerate(zip([
+                    self.avg_R,
+                    self.centers_dict['clusters'][label],
+                    self.centers_dict['subclusters'][label][sublabel]
+                ], diff_maps)):
+                    diffs = self._get_diffs(intrasub_ages, benchmark)
+                    mean = np.mean(diffs)
+                    std = np.std(diffs)
+                    print(f"{i},{label},{sublabel},{mean},{std}")
+
     def map_cluster_stddev(self):
         n_labels = count_clusters(self.labels)
         subclust_sizes = make_subclust_sizes(self.labels, self.sublabels)
