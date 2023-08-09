@@ -33,43 +33,27 @@ docker run -id -p 5901:5901 --name nccluster --mount type=bind,source=/some/path
 ```
 vncviewer localhost:5901
 ```
-## Usage
-Instructions out of date! Not guaranteed to work.
+## Basic usage
 Edit the example configuration file in folder 'configs' as needed (see explanations therein). 
-### K-means clustering
 
-1. Run the script:
+### Data exploration
 ```
-python examples/workflows_demo.py --method km --config configs/example.conf
+python examples/data_explorer.py ---config configs/example.conf
+```
+Interact with the two views using arrow keys:
+- **left-right** to navigate in time (both plots);
+- **up-down** to navigate in space (left-hand plot).
+
+Change the cross-section direction by pressing **x, y, z**. For the x and y views, a line appears on the right-hand plot to show you the location of the cross-section.
+
+Press **q** to close the figure.
+
+### View combined time series
+```
+python examples/workflows_demo.py --method all_ts --config configs/example.conf
 ```
 
-2. Interacting with the plots:
-- left-hand plot is the main view
-- right-hand plot is a surface slice across the z axis; a black line will appear here to help you locate slices taken perpendicular to x or y
-- **left/right** arrow to move backward/forward in time
-- **up/down** arrow to navigate the current spatial dimension that the viewer is slicing across
-- press **x, y, z** to change the main view; a line on the plot below will appear to help you locate the current slice on a map
-- **q** to close viewer and continue workflow
-
-### Correlation clustering
-1. Run the script:
-```
-python examples/workflows_demo.py --method corr --config configs/example.conf
-```
-2. Interaction:
-- upper-left plot is the main view
-- upper-right plot is a surface slice across the z axis; a black line will appear here to help you locate slices taken perpendicular to x or y; 
-- lower-left plot is the correlation map, click anywhere on this plot to set a location for further analysis (a marker will appear where you clicked), showing the correlation coefficient of every other map point relative to the one you clicked
-- lower-left plot is the cluster map, this shows the results of agglomerative clustering (the flattening of the hierarchy into clusters can change depending on the exact methods and threshold used; see the input fields and button selections on the right for options)
-- bottom plot is the evolution plot, this will activate once you click a point on the surface slice, showing the evolution of radiocarbon ages at that location in time; a vertical line appears when you change time-step in the main view, to help you locate yourself in time
-- **left/right** arrow to move backward/forward in time
-- **up/down** arrow to navigate the current spatial dimension that the viewer is slicing across
-- press **x, y, z** to change the main view; a line on the plot below will appear to help you locate the current slice on a map
-- **click** on the lower-right correlation map to set a location for analysis
-- **q** to close viewer and continue workflow
-
-### Timeseries clustering
-1. Run the script:
+### Time series clustering
 ```
 python examples/workflows_demo.py --method ts --config configs/example.conf
 ```
@@ -77,7 +61,59 @@ For more advanced analysis, the two-step method first detects shape-based cluste
 ```
 python examples/workflows_demo.py --method two --config configs/example.conf
 ```
+### Dendrogram
+```
+python examples/workflows_demo.py --method dendro --config configs/example.conf
+```
+On the left you can set options for the agglomerative clustering.
+Top-right plot shows clustering results on map.
+Bottom-right plot shows the dendrogram. **Click** to set a new threshold for flattening the dendrogram (only applies when f-cluster criterion is set to distance).
 
-2. Explanations of results:
-- the left-hand plot shows the timeseries assigned to each cluster (thin black lines) and the (sub)cluster barycenters (red line(s))
-- the right-hand plot is a map of the clustering results
+### Correlation clustering
+```
+python examples/workflows_demo.py --method corr --config configs/example.conf
+```
+Depending on your config file, you
+Explanation of the interface:
+
+- 2x2 table of maps:
+	+ top row is the [data explorer](#data-exploration)
+	+ bottom-left  is the correlation map, **click** anywhere on this plot to set a location for further analysis (a marker will appear where you clicked), showing the correlation coefficient of every other map point relative to the one you clicked
+	+ bottom-right plot is the cluster map, this shows the results of agglomerative clustering and the procedure can be modified based on the controls to the right, see [Dendrogram](#dendrogram)
+- bottom plot is the evolution plot, this will activate once you click a point on the surface slice, showing the evolution of radiocarbon ages at that location in time; a vertical line appears when you change time-step in the main view, to help locate the timeslice
+
+### K-means clustering
+```
+python examples/workflows_demo.py --method km --config configs/example.conf
+```
+This proceeds interactively, follow the instructions. The clustering results are shown using the [data explorer](#data-exploration). Unlike time series clustering, the clusters are re-computer at each timestep based on several variables, so you can navigate through time.
+
+### Clustering metrics
+```
+python examples/workflows_demo.py --method metrics --config configs/example.conf
+```
+Each iteration runs the [ts](#time-series-clustering) method with an increasing number of clusters. Can take several minutes to complete depending on the method, maximum number of iterations, and number of initializations as defined in the config file.
+
+In the sum of squared errors (top-most plot), the vertical line denotes the elbow/knee point.
+
+## Saving and re-using labels
+Ensure you have familiarized yourself with at least the [data explorer](#data-exploration) and [time series clustering](#time-series-clustering). For now only saves/loads labels created by time series clustering.
+
+### Save labels to file after time series clustering
+```
+python examples/save_labels.py --config configs/example.conf --method [ts|two] --file /some/path/to/savefile
+```
+### Load labels from file and plot
+```
+python examples/load_labels.py --config configs/example.conf --method [ts|two] --file /some/path/to/savefile
+```
+### Compare saved labels between two data sets
+```
+python examples/compare_demo.py --left /path/to/first/file.nc --right /path/to/second/file.nc
+```
+Press **q** to dismiss each consecutive plot. The script will automatically regrid and reorder the labels to improve overlap between the two maps, showing each step until the overlap is computed and illustrated with Venn diagrams, at which point pressing q again will exit the program.
+
+To skip the intermediate steps, pass the flags --no-regrid (only if you know for sure that the maps are the same size!) and/or --no-match, for example:
+```
+python examples/compare_demo.py --left /path/to/first/file.nc --right /path/to/second/file.nc --no-regrid --no-match
+```
