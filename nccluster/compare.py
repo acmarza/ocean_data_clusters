@@ -40,12 +40,13 @@ class ClusterMatcher:
         self.labels_left.to_netcdf(save_path_1)
         self.labels_right.to_netcdf(save_path_2)
 
-    def compare_maps(self):
+    def compare_maps(self, title=None):
         fig, (ax1, ax2) = plt.subplots(1, 2)
         ax1.imshow(self.labels_left.values, origin='lower')
         ax1.set_title(self.labels_left.long_name)
         ax2.imshow(self.labels_right.values, origin='lower')
         ax2.set_title(self.labels_right.long_name)
+        fig.suptitle(title)
         plt.show()
 
     def overlap(self):

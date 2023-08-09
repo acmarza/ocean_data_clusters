@@ -24,17 +24,17 @@ def main():
     matcher.labels_from_file(args.left, args.right)
 
     # first look at labels
-    matcher.compare_maps()
+    matcher.compare_maps(title="Raw labels")
 
     if args.regrid:
         # regrid labels to same coords and view results
         matcher.regrid_left_to_right()
-        matcher.compare_maps()
+        matcher.compare_maps(title="Regridded labels")
 
     if args.match:
         # harmonise colors and view results
         matcher.match_labels()
-        matcher.compare_maps()
+        matcher.compare_maps(title="Reordered labels")
 
     matcher.overlap()
 
