@@ -8,7 +8,7 @@ from matplotlib.cm import get_cmap, Greys, ScalarMappable
 from matplotlib_venn import venn2
 from nccluster.ts import TimeSeriesWorkflowBase
 from nccluster.utils import make_subclusters_map, locate_medoids,\
-    ts_from_locs, make_subclust_sizes, count_clusters
+    ts_from_locs, make_subclust_sizes, count_clusters, show_map
 from numpy.linalg import norm
 from scipy.stats import gaussian_kde
 
@@ -239,6 +239,8 @@ class DdR_Base:
 
         # locate the subcluster medoids in the original time series
         age_array = wf_orig.ds_var_to_array('R_age')[:, 0]
+
+        print("[i] Locating medoids, stand by...")
         self.locations_dict = locate_medoids(
             self.labels, self.sublabels, age_array)
 
@@ -284,6 +286,12 @@ class DdR_Base:
         diff_abs = abs(diff)
         # temporal average
         return np.nanmean(diff_abs, axis=0)
+
+    def _get_diffs_time_std(self, data, benchmark):
+        t, y, x = data.shape
+        diff = data - benchmark.reshape(t, 1, 1).repeat(y, 1).repeat(x, 2)
+        diff_abs = abs(diff)
+        return np.nanstd(diff_abs, axis=0)
 
     def _put_cosines_in_df(self, df, mask, benchmark):
 
@@ -363,7 +371,8 @@ class DdR_Maps(DdR_Base):
             ax.set_title(title)
 
         # add colorbar for the similarity levels
-        fig.colorbar(mappable, ax=ax, cax=cax, orientation='horizontal')
+        fig.colorbar(mappable, ax=ax, cax=cax, orientation='horizontal',
+                     label="(1 - cosine) for ΔR time series")
         plt.show()
 
     def map_mean_diff(self):
@@ -408,6 +417,98 @@ class DdR_Maps(DdR_Base):
 
         fig.colorbar(mappable, cax=cax, orientation='horizontal',
                      label="mean of ΔR distribution (yrs)")
+        plt.show()
+
+    def map_cluster_stddev(self):
+        n_labels = count_clusters(self.labels)
+        subclust_sizes = make_subclust_sizes(self.labels, self.sublabels)
+        diff_maps = [np.full_like(self.labels, np.nan) for i in range(3)]
+
+        for label in range(n_labels):
+            for sublabel in range(subclust_sizes[label]):
+                mask = self._get_mask(label, sublabel)
+                intrasub_ages = self._get_subcluster_data(mask, self.R_target)
+                for benchmark, diff_map in zip([
+                    self.avg_R,
+                    self.centers_dict['clusters'][label],
+                    self.centers_dict['subclusters'][label][sublabel]
+                ], diff_maps):
+                    diffs = self._get_diffs(intrasub_ages, benchmark)
+                    std = np.std(diffs)
+                    diff_map[~mask] = std
+
+        cmap = 'viridis'
+        norm = LogNorm(vmin=10, vmax=1000)
+        titles = ['vs. global surface mean',
+                  'vs. cluster medoid',
+                  'vs. subcluster medoid']
+        fig, axes = plt.subplots(nrows=1, ncols=3)
+        cax = axes[1].inset_axes([-1, -0.4, 3, 0.2])
+        mappable = ScalarMappable(norm=norm, cmap=cmap)
+        for ax, diff_map, title in zip(axes, diff_maps, titles):
+            ax.imshow(diff_map, origin='lower', norm=norm, cmap=cmap)
+            ax.set_title(title)
+            ax.set_xticks([])
+            ax.set_yticks([])
+
+        fig.colorbar(mappable, cax=cax, orientation='horizontal',
+                     label="stddev of ΔR distribution (yrs)")
+        plt.show()
+
+    def map_local_stddev(self):
+
+        # note the number of clusters
+        n_labels = count_clusters(self.labels)
+
+        # note the number of subclusters in each cluster
+        subclust_sizes = make_subclust_sizes(self.labels, self.sublabels)
+
+        # initialize 3 empty maps with the same shape as the labels
+        diff_maps = [np.full_like(self.labels, np.nan) for i in range(3)]
+
+        # for each cluster
+        for label in range(n_labels):
+
+            # for each subcluster in the current cluster
+            for sublabel in range(subclust_sizes[label]):
+
+                # get the binary mask that is true over the current subcluster
+                mask = self._get_mask(label, sublabel)
+
+                # extract the R-ages in this subcluster
+                intrasub_ages = self._get_subcluster_data(mask, self.R_target)
+
+                # assign each of the 3 empty maps to one of 3 benchmarks:
+                # 1. global surface mean R-age;
+                # 2. current cluster medoid;
+                # 3. current subcluster medoid.
+                for benchmark, diff_map in zip([
+                    self.avg_R,
+                    self.centers_dict['clusters'][label],
+                    self.centers_dict['subclusters'][label][sublabel]
+                ], diff_maps):
+
+                    # compute the R-age difference between each map point and
+                    # the current benchmark, averaged over time
+                    diffs = self._get_diffs_time_std(intrasub_ages, benchmark)
+                    diff_map[~mask] = diffs[~diffs.mask]
+
+        cmap = 'viridis'
+        norm = LogNorm(vmin=10, vmax=1000)
+        titles = ['vs. global surface mean',
+                  'vs. cluster medoid',
+                  'vs. subcluster medoid']
+        fig, axes = plt.subplots(nrows=1, ncols=3)
+        cax = axes[1].inset_axes([-1, -0.4, 3, 0.2])
+        mappable = ScalarMappable(norm=norm, cmap=cmap)
+        for ax, diff_map, title in zip(axes, diff_maps, titles):
+            ax.imshow(diff_map, origin='lower', norm=norm, cmap=cmap)
+            ax.set_title(title)
+            ax.set_xticks([])
+            ax.set_yticks([])
+
+        fig.colorbar(mappable, cax=cax, orientation='horizontal',
+                     label="stddev of ΔR distribution (yrs)")
         plt.show()
 
     def map_diffs(self):
