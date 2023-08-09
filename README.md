@@ -117,3 +117,19 @@ To skip the intermediate steps, pass the flags --no-regrid (only if you know for
 ```
 python examples/compare_demo.py --left /path/to/first/file.nc --right /path/to/second/file.nc --no-regrid --no-match
 ```
+### Delta-R histograms
+Apply labels from one data set (described by original.conf) to another data set (described by example.conf):
+```
+python examples/DdR.py --config configs/example.conf --labels /path/to/savefile.nc --original configs/original.conf
+
+```
+The labels must correspond to the configuration file passed as --original!
+Click on the map to inspect a subcluster. The cosine similarity is plotted for the selected subcluster. The subcluster medoid is marked by a green star. On the right, the bottom plot shows the R-ages for grid points in this subcluster in grey, the subcluster centroid in blue, the cluster centroid in orange, the global surface mean R-age in green. The differences between each of the three benchmarks the and the subcluster time series are summarized as density plots in the top-right plot.
+
+### Delta-R stats maps
+Apply labels from one data set (described by original.conf) to another data set (described by example.conf):
+```
+python examples/map_DdR.py --config configs/example.conf --labels /path/to/savefile.nc --original configs/original.conf
+
+```
+The script proceeds interactively. Type a number and hit enter to plot the desired maps.
