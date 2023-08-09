@@ -19,9 +19,6 @@ class CorrelationWorkflow(TimeSeriesWorkflowBase):
             self.__check_pval_mat_file()
 
     def run(self):
-        # run parent workflow (time series plot)
-        TimeSeriesWorkflowBase.run(self)
-
         # keyword arguments to be passed to CorrelationViewer
         kwargs = self.config['correlation']
 
@@ -60,7 +57,7 @@ class DendrogramWorkflow(RadioCarbonWorkflow):
 
     def run(self):
         t, _, y, x = self._age_array.shape
-        evolutions = np.reshape(self._age_array[:, 0], [t, x*y]).T
+        evolutions = np.reshape(self._age_array[:, 0], [t, x * y]).T
         corr_mat = np.corrcoef(evolutions)
         cmap = self.config['default']['palette']
         DendrogramViewer(corr_mat, (y, x), title=self.config_path,
