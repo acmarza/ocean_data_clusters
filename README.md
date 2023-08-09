@@ -24,15 +24,25 @@ conda activate nccluster
 ```
 docker pull anamarza/nccluster
 ```
-3. Have your config and data folders ready; note their paths.
+2. Download this git repo:
+```
+git clone https://gitlab.com/earth15/ocean_data_clusters.git
+```
+
+3. Note the paths of the downloaded git repo and your data folder.
 4. Start up the container:
 ```
-docker run -id -p 5901:5901 --name nccluster --mount type=bind,source=/some/path/to/configs,target=/app/configs  --mount type=bind,source=/some/path/to/data,target=/app/ocean_data anamarza/nccluster
+docker run -id -p 5901:5901 --name nccluster --mount type=bind,source=/path/to/ocean_data_clusters,target=/app  --mount type=bind,source=/path/to/data,target=/data anamarza/nccluster
 ```
 5. Use your preferred VNC viewer to connect to the container at address localhost:5901, for example:
 ```
 vncviewer localhost:5901
 ```
+6. Right-click and open a terminal emulator.
+7. Navigate to the app folder: ```cd /app```
+
+We are now ready to use the programs.
+
 ## Basic usage
 Edit the example configuration file in folder 'configs' as needed (see explanations therein). 
 
