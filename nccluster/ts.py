@@ -337,16 +337,28 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
     def clustering_metrics(self, n_min=2, n_max=10, show=True):
         inertias = []
 
+        # if plotting metrics, compute all the indices
         if show:
             sil_scores = []
             ch_scores = []
             db_scores = []
+        # otherwise we're only interested in the elbow point
+
+        # get the time series in the correct format
         dataset = self.__make_dataset()
-        n_range = range(n_min, n_max+1)
+
+        # the range of K (number of clusters)
+        n_range = range(n_min, n_max + 1)
+
+        # for every value of K (with a nice progress bar)
         for n in tqdm(n_range, desc='[i] metrics: ', leave=True, position=1):
+
+            # fit the model and compute the inertias
             self._fit_model(n_clusters=n, dataset=dataset, quiet=True)
             labels = self.model.labels_
             inertias.append(self.model.inertia_)
+
+            # compute the other indices if we're going to plot them
             if show:
                 sil_scores.append(
                     silhouette_score(dataset, labels, metric='euclidean'))
@@ -355,25 +367,40 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
                 db_scores.append(-davies_bouldin_score(dataset[:, :, 0],
                                                        labels))
 
+        # locate the elbow point
         kn = KneeLocator(x=n_range,
                          y=inertias,
                          curve='convex',
                          direction='decreasing')
+
+        # just return the elbow point if we're not plotting
         if not show:
             return kn.knee
 
+        # if we're plotting, prepare the figure
         fig, axes = plt.subplots(4, 1, figsize=(5, 10))
+
+        # handy list of the scores to plot
         scores = [inertias, sil_scores, ch_scores, db_scores]
+
+        # handy list of the plot titles
         y_labels = ['Sum of squared errors',
                     'Silhouette Score',
                     'Calinski-Harabasz Index',
                     'Davies-Bouldin Index\n(flipped)']
+
+        # loop over the Axes, plot the scores, put the labels on
         for (ax, score, label) in zip(axes, scores, y_labels):
             ax.plot(n_range, score)
             ax.set_ylabel(label)
 
+        # only on the plot of inertias, put the elbow point as a vertical line
         axes[0].axvline(kn.knee)
+
+        # bottom text
         axes[-1].set_xlabel("number of clusters, K")
+
+        # top text
         fig.suptitle("Clustering metrics summary")
 
         plt.tight_layout()
