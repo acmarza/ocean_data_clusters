@@ -22,8 +22,7 @@ def main():
                         the data: km = k-means; ts = timeseries clustering;\
                         corr = correlation viewer + hierarchical clustering;\
                         two = two-step (clusters + subclusters) time series;\
-                        dendro = dendrogram viewer + hierarchical clustering;\
-                        metrics = time series clustering metrics"
+                        dendro = dendrogram viewer + hierarchical clustering
                         )
     args = parser.parse_args()
 
@@ -34,10 +33,6 @@ def main():
         wf = TimeSeriesClusteringWorkflow(args.config)
     elif args.method == 'all_ts':
         wf = TimeSeriesWorkflowBase(args.config)
-    elif args.method == 'metrics':
-        wf = TimeSeriesClusteringWorkflow(args.config)
-        wf.plot_clustering_metrics()
-        return
     elif args.method == 'corr':
         wf = CorrelationWorkflow(args.config)
     elif args.method == 'two':
