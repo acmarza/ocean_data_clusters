@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from io import StringIO
 from kneed import KneeLocator
 from matplotlib.cm import get_cmap
 from matplotlib.colors import Normalize
@@ -344,49 +343,6 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
             centers.append(cluster_center)
         return centers
 
-    def plot_clustering_metrics(self, load=False):
-        savefile = self.config['timeseries']['metrics_savefile_path']
-        if not load:
-            csv_string = self.get_clustering_metrics(save_csv=False)
-            df = pd.read_csv(StringIO(csv_string))
-        else:
-            with open(savefile) as f:
-                df = pd.read_csv(f)
-
-        # prepare four subplots (one per row)
-        fig, axes = plt.subplots(4, 1, figsize=(5, 10))
-
-        K_range = df['K']
-
-        # handy list of the scores to plot
-        scores = [df['inertia'], df['sil_score'],
-                  df['ch_index'], df['db_index']]
-
-        # handy list of the plot titles
-        y_labels = ['Sum of squared errors',
-                    'Silhouette Score',
-                    'Calinski-Harabasz Index',
-                    'Davies-Bouldin Index\n(flipped)']
-
-        # loop over the Axes, plot the scores, put the labels on
-        for (ax, score, label) in zip(axes, scores, y_labels):
-            ax.plot(K_range, score)
-            ax.set_ylabel(label)
-
-        # only on the plot of inertias, put the elbow point as a vertical line
-        kn = KneeLocator(x=K_range, y=df['inertia'], curve='convex',
-                         direction='decreasing')
-        axes[0].axvline(kn.knee)
-
-        # bottom text
-        axes[-1].set_xlabel("number of clusters, K")
-
-        # top text
-        fig.suptitle("Clustering metrics summary")
-
-        plt.tight_layout()
-        plt.show()
-
     def get_knee(self, n_min=2, n_max=10):
         inertias = []
         dataset = self.__make_dataset()
@@ -401,7 +357,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
                          direction='decreasing')
         return kn.knee
 
-    def get_clustering_metrics(self, n_min=2, n_max=10, save_csv=False):
+    def export_clustering_metrics(self, n_min=2, n_max=10):
 
         csv_string = "K,inertia,sil_score,ch_index,db_index\n"
 
@@ -425,11 +381,11 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
 
             csv_string += f"{K},{inertia},{sil},{ch},{db}\n"
 
-        if save_csv:
-            with open(self.config['timeseries']['metrics_savefile_path']) as f:
-                f.write(csv_string)
-        else:
-            return csv_string
+        savefile = self.config['timeseries']['metrics_savefile_path']
+        with open(savefile, 'w+') as f:
+            f.write(csv_string)
+
+        print(f"[i] Exported clustering metrics to {savefile}")
 
     def load_labels_from_file(self, filename):
         print("[i] Loading labels from " + filename)
