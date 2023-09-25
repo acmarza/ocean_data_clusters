@@ -98,13 +98,19 @@ python examples/workflows_demo.py --method km --config configs/example.conf
 ```
 This proceeds interactively, follow the instructions. The clustering results are shown using the [data explorer](#data-exploration). Unlike time series clustering, the clusters are re-computer at each timestep based on several variables, so you can navigate through time.
 
-### Clustering metrics
+## Clustering metrics
+Since this this takes a while to run, we always save the results to a file specified in the config under the heading ```[timeseries]``` with variable name ```metrics_savefile_path```.
 ```
-python examples/workflows_demo.py --method metrics --config configs/example.conf
+python examples/export_metrics.py --config configs/example.conf
 ```
-Each iteration runs the [ts](#time-series-clustering) method with an increasing number of clusters. Can take several minutes to complete depending on the method, maximum number of iterations, and number of initializations as defined in the config file.
+Each iteration runs the [ts](#time-series-clustering) method with an increasing number of clusters. This take several minutes to complete depending on the method, maximum number of iterations, and number of initializations as defined in the config file.
 
-In the sum of squared errors (top-most plot), the vertical line denotes the elbow/knee point.
+We plot one or more sets of clustering metrics results using:
+```
+python examples/plot_metrics.py --savefiles /path/to/file1.csv,/path/to/file2.csv --labels label1,label2 --title "Clustering metrics results" --styles solid,dotted
+```
+
+In the sum of squared errors plot (top-most), the vertical line denotes the elbow/knee point.
 
 ## Saving and re-using labels
 Ensure you have familiarized yourself with at least the [data explorer](#data-exploration) and [time series clustering](#time-series-clustering). For now only saves/loads labels created by time series clustering.
