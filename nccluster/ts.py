@@ -381,13 +381,8 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         # bottom text
         axes[-1].set_xlabel("number of clusters, K")
 
-        scaling_text = "normalised"\
-            if self.config['timeseries'].getboolean('scaling')\
-            else "un-normalised"
-
         # top text
-        fig.suptitle(f"Clustering metrics summary\n\
-{self.config['timeseries']['method']}, {scaling_text}")
+        fig.suptitle("Clustering metrics summary")
 
         plt.tight_layout()
         plt.show()
