@@ -345,12 +345,12 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         return centers
 
     def plot_clustering_metrics(self, load=False):
-
+        savefile = self.config['timeseries']['metrics_savefile_path']
         if not load:
             csv_string = self.get_clustering_metrics(save_csv=False)
             df = pd.read_csv(StringIO(csv_string))
         else:
-            with open(self.config['timeseries']['metrics_savefile_path']) as f:
+            with open(savefile) as f:
                 df = pd.read_csv(f)
 
         # prepare four subplots (one per row)
