@@ -861,6 +861,7 @@ class DendrogramViewer(FclusterViewer):
                                  ax=self.dendro_ax)
         self.dendro_ax.axhline(y=self.fcluster_thresh)
         self.dendro_ax.set_ylabel("cophenetic distance")
+        self.dendro_ax.set_facecolor("lightgrey")
 
     def dendro_ax_on_click(self, event):
         if not event.inaxes == self.dendro_ax:
