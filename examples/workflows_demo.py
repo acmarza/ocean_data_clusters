@@ -36,7 +36,7 @@ def main():
         wf = TimeSeriesWorkflowBase(args.config)
     elif args.method == 'metrics':
         wf = TimeSeriesClusteringWorkflow(args.config)
-        wf.clustering_metrics()
+        wf.plot_clustering_metrics()
         return
     elif args.method == 'corr':
         wf = CorrelationWorkflow(args.config)

@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from io import StringIO
 from kneed import KneeLocator
 from matplotlib.cm import get_cmap
 from matplotlib.colors import Normalize
@@ -90,6 +91,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         self.__check_scaling_bool()
         self.__check_labels_long_name()
         self.__check_palette()
+        self.__check_metrics_savefile()
 
     def _setters(self):
         super()._setters()
@@ -165,6 +167,14 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
             required=True,
             default=10,
             confirm_msg="[i] Number of initializaitons for clustering: "
+        )
+
+    def __check_metrics_savefile(self):
+        self._check_config_option(
+            'timeseries', 'metrics_savefile_path',
+            missing_msg="[!] You have not specified a savefile for metrics.",
+            input_msg="[>] Metrics savefile path: ",
+            confirm_msg="[i] Using metrics savefile path: "
         )
 
     def _fit_model(self, n_clusters=None, dataset=None, quiet=False):
@@ -334,54 +344,23 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
             centers.append(cluster_center)
         return centers
 
-    def clustering_metrics(self, n_min=2, n_max=10, show=True):
-        inertias = []
+    def plot_clustering_metrics(self, load=False):
 
-        # if plotting metrics, compute all the indices
-        if show:
-            sil_scores = []
-            ch_scores = []
-            db_scores = []
-        # otherwise we're only interested in the elbow point
+        if not load:
+            csv_string = self.get_clustering_metrics(save_csv=False)
+            df = pd.read_csv(StringIO(csv_string))
+        else:
+            with open(self.config['timeseries']['metrics_savefile_path']) as f:
+                df = pd.read_csv(f)
 
-        # get the time series in the correct format
-        dataset = self.__make_dataset()
-
-        # the range of K (number of clusters)
-        n_range = range(n_min, n_max + 1)
-
-        # for every value of K (with a nice progress bar)
-        for n in tqdm(n_range, desc='[i] metrics: ', leave=True, position=1):
-
-            # fit the model and compute the inertias
-            self._fit_model(n_clusters=n, dataset=dataset, quiet=True)
-            labels = self.model.labels_
-            inertias.append(self.model.inertia_)
-
-            # compute the other indices if we're going to plot them
-            if show:
-                sil_scores.append(
-                    silhouette_score(dataset, labels, metric='euclidean'))
-                ch_scores.append(calinski_harabasz_score(dataset[:, :, 0],
-                                                         labels))
-                db_scores.append(-davies_bouldin_score(dataset[:, :, 0],
-                                                       labels))
-
-        # locate the elbow point
-        kn = KneeLocator(x=n_range,
-                         y=inertias,
-                         curve='convex',
-                         direction='decreasing')
-
-        # just return the elbow point if we're not plotting
-        if not show:
-            return kn.knee
-
-        # if we're plotting, prepare the figure
+        # prepare four subplots (one per row)
         fig, axes = plt.subplots(4, 1, figsize=(5, 10))
 
+        K_range = df['K']
+
         # handy list of the scores to plot
-        scores = [inertias, sil_scores, ch_scores, db_scores]
+        scores = [df['inertia'], df['sil_score'],
+                  df['ch_index'], df['db_index']]
 
         # handy list of the plot titles
         y_labels = ['Sum of squared errors',
@@ -391,22 +370,71 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
 
         # loop over the Axes, plot the scores, put the labels on
         for (ax, score, label) in zip(axes, scores, y_labels):
-            ax.plot(n_range, score)
+            ax.plot(K_range, score)
             ax.set_ylabel(label)
 
         # only on the plot of inertias, put the elbow point as a vertical line
+        kn = KneeLocator(x=K_range, y=df['inertia'], curve='convex',
+                         direction='decreasing')
         axes[0].axvline(kn.knee)
 
         # bottom text
         axes[-1].set_xlabel("number of clusters, K")
 
+        scaling_text = "normalised"\
+            if self.config['timeseries'].getboolean('scaling')\
+            else "un-normalised"
+
         # top text
-        fig.suptitle("Clustering metrics summary")
+        fig.suptitle(f"Clustering metrics summary\n\
+{self.config['timeseries']['method']}, {scaling_text}")
 
         plt.tight_layout()
         plt.show()
 
+    def get_knee(self, n_min=2, n_max=10):
+        inertias = []
+        dataset = self.__make_dataset()
+        K_range = range(n_min, n_max + 1)
+
+        for K in tqdm(K_range, desc='[i] locating knee: ', leave=True,
+                      position=1):
+            self._fit_model(n_clusters=K, dataset=dataset, quiet=True)
+            inertias.append(self.model.inertia_)
+
+        kn = KneeLocator(x=K_range, y=inertias, curve='convex',
+                         direction='decreasing')
         return kn.knee
+
+    def get_clustering_metrics(self, n_min=2, n_max=10, save_csv=False):
+
+        csv_string = "K,inertia,sil_score,ch_index,db_index\n"
+
+        # get the time series in the correct format
+        dataset = self.__make_dataset()
+
+        # the range of K (number of clusters)
+        K_range = range(n_min, n_max + 1)
+
+        # for every value of K (with a nice progress bar)
+        for K in tqdm(K_range, desc='[i] metrics: ', leave=True, position=1):
+
+            # fit the model and get the labels
+            self._fit_model(n_clusters=K, dataset=dataset, quiet=True)
+            labels = self.model.labels_
+
+            inertia = self.model.inertia_
+            sil = silhouette_score(dataset, labels, metric='euclidean')
+            ch = calinski_harabasz_score(dataset[:, :, 0], labels)
+            db = davies_bouldin_score(dataset[:, :, 0], labels)
+
+            csv_string += f"{K},{inertia},{sil},{ch},{db}\n"
+
+        if save_csv:
+            with open(self.config['timeseries']['metrics_savefile_path']) as f:
+                f.write(csv_string)
+        else:
+            return csv_string
 
     def load_labels_from_file(self, filename):
         print("[i] Loading labels from " + filename)
@@ -463,7 +491,7 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
             self.__mask_cluster(labels, label)
 
             # run algorithm again on these points, without normalisation
-            elbow = self.clustering_metrics(show=False)
+            elbow = self.get_knee()
             self._fit_model(n_clusters=elbow, quiet=True)
             self.centroids_dict['cluster_' + str(label)] =\
                 self.model.cluster_centers_
