@@ -22,7 +22,7 @@ def main():
                         the data: km = k-means; ts = timeseries clustering;\
                         corr = correlation viewer + hierarchical clustering;\
                         two = two-step (clusters + subclusters) time series;\
-                        dendro = dendrogram viewer + hierarchical clustering
+                        dendro = dendrogram viewer + hierarchical clustering"
                         )
     args = parser.parse_args()
 
