@@ -107,8 +107,25 @@ Each iteration runs the [ts](#time-series-clustering) method with an increasing 
 
 We plot one or more sets of clustering metrics results using:
 ```
-python examples/plot_metrics.py --savefiles /path/to/file1.csv,/path/to/file2.csv --labels label1,label2 --title "Clustering metrics results" --styles solid,dotted
+python examples/plot_metrics.py --config /path/to/config.conf --title "Clustering metrics results" --subtitles "column1,column2"
 ```
+Where config.conf takes the form of a csv with four columns:
+```
+metrics_csv,label,column,style
+```
+On each line under these headings, write:
+- the path to one of your previously exported csv containing clustering metrics results
+- the label that the data from this file should be given in the legend
+- the column it should be plotted in (numbered from 1: so in a side-by-side comparison the data on the left has column 1, data on the right has column 2)
+- the linestyle for plotting (e.g. solid, dotted, dashed; see matplotlib reference)
+
+For example:
+```
+metrics_csv,label,column,style
+/path/to/results1.csv,run1,1,solid
+/path/to/results2.csv,run2,1,dotted
+```
+The above will plot two sets of clustering metrics results in a single column, with two different styles identified in the legend by the labels run1 and run2. In this case we should specify as single subtitle when running plot_metrics.py, as we have only one column of plots.
 
 In the sum of squared errors plot (top-most), the vertical line denotes the elbow/knee point.
 
