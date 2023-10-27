@@ -231,7 +231,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         self._map_clusters(combined_ax_bool=combined_ax_bool)
         plt.show()
 
-    def _plot_ts_clusters(self):
+    def _plot_ts_clusters(self, combined_ax_bool=True):
         # get predictions for our time series from trained model
         # i.e. to which cluster each time series belongs
         print("[i] Plotting time series by cluster")
@@ -243,11 +243,12 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         cmap = get_cmap(self.config['default']['palette'])
 
         # for each cluster/label
-        combined_ax = self.fig.add_subplot(2, 2, 4)
-        combined_ax.set_title("Combined R-age histories")
-        combined_ax.set_xlabel("time step")
-        combined_ax.yaxis.set_label_position("right")
-        combined_ax.yaxis.tick_right()
+        if combined_ax_bool:
+            combined_ax = self.fig.add_subplot(2, 2, 4)
+            combined_ax.set_title("Combined R-age histories")
+            combined_ax.set_xlabel("time step")
+            combined_ax.yaxis.set_label_position("right")
+            combined_ax.yaxis.tick_right()
 
         for label in range(0, n_clusters):
             # create a subplot in a table with n_cluster rows and 1 column
@@ -263,8 +264,9 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
             for ts in cluster_tss:
                 # plot with a thin transparent line
                 ax.plot(ts.ravel(), color=color, alpha=.2)
-                combined_ax.plot(ts.ravel(), color=color, alpha=.1,
-                                 linewidth=0.2)
+                if combined_ax_bool:
+                    combined_ax.plot(ts.ravel(), color=color, alpha=.1,
+                                     linewidth=0.2)
             # plot the cluster barycenter
             ax.plot(euclidean_barycenter(cluster_tss).ravel(), "k-")
             if label > 0:
@@ -279,11 +281,14 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
                     rotation='horizontal',
                     transform=ax.transAxes)
 
-    def _map_clusters(self):
+    def _map_clusters(self, combined_ax_bool=True):
         print("[i] Mapping out clusters")
 
         # view the clusters on a map
-        ax = self.fig.add_subplot(222)
+        if combined_ax_bool:
+            ax = self.fig.add_subplot(222)
+        else:
+            ax = self.fig.add_subplot(122)
         ax.set_xticks([])
         ax.set_yticks([])
         ax.imshow(self.labels, origin='lower',
