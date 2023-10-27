@@ -224,11 +224,11 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
 
         return dataset
 
-    def view_results(self):
+    def view_results(self, combined_ax_bool=True):
         self.fig = plt.figure()
         # plt.rcParams['figure.constrained_layout.use'] = True
-        self._plot_ts_clusters()
-        self._map_clusters()
+        self._plot_ts_clusters(combined_ax_bool=combined_ax_bool)
+        self._map_clusters(combined_ax_bool=combined_ax_bool)
         plt.show()
 
     def _plot_ts_clusters(self):
@@ -478,18 +478,21 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         # re-buld the time series dataset (now restricted to this cluster)
         self._set_ts()
 
-    def _map_clusters(self):
+    def _map_clusters(self, combined_ax_bool=True):
         # override parent method
         subclusters_map = make_subclusters_map(self.labels2step[:, :, 0],
                                                self.labels2step[:, :, 1])
-        ax = self.fig.add_subplot(222)
+        if combined_ax_bool:
+            ax = self.fig.add_subplot(222)
+        else:
+            ax = self.fig.add_subplot(122)
         ax.imshow(subclusters_map, origin='lower',
                   cmap=self.config['default']['palette'])
         ax.set_title(self.config['default']['labels_long_name'])
         ax.set_xticks([])
         ax.set_yticks([])
 
-    def _plot_ts_clusters(self):
+    def _plot_ts_clusters(self, combined_ax_bool = True):
         sublabels = self.labels2step[:, :, 1]
         sublabels = sublabels[~np.isnan(sublabels)].flatten()
         labels = self.labels2step[:, :, 0]
@@ -504,11 +507,12 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
         cmap = get_cmap(self.config['default']['palette'])
 
         # for each cluster/label
-        combined_ax = self.fig.add_subplot(224)
-        combined_ax.set_title("Combined R-age histories")
-        combined_ax.set_xlabel("time step")
-        combined_ax.yaxis.set_label_position("right")
-        combined_ax.yaxis.tick_right()
+        if combined_ax_bool:
+            combined_ax = self.fig.add_subplot(224)
+            combined_ax.set_title("Combined R-age histories")
+            combined_ax.set_xlabel("time step")
+            combined_ax.yaxis.set_label_position("right")
+            combined_ax.yaxis.tick_right()
 
         # for each cluster/label
         for label in range(n_clusters):
@@ -535,8 +539,9 @@ class TwoStepTimeSeriesClusterer(TimeSeriesClusteringWorkflow):
                 subcluster_tss = self.ts[label_match & sublabel_match]
                 for ts in subcluster_tss:
                     ax.plot(ts.ravel(), color=color)
-                    combined_ax.plot(ts.ravel(), color=color, alpha=.1,
-                                        linewidth=0.2)
+                    if combined_ax_bool:
+                        combined_ax.plot(ts.ravel(), color=color, alpha=.1,
+                                            linewidth=0.2)
                 barycenter = euclidean_barycenter(subcluster_tss)
                 barycenters.append(barycenter)
             # need to plot these last else they'd be covered by subcluster ts
