@@ -55,10 +55,13 @@ class TimeSeriesWorkflowBase(RadioCarbonWorkflow):
         fig.show()
 
     def _make_ts_array(self, var='R_age'):
-        # remember shape = (t, z, y, x)
-        # we want ts_array.shape = (n, t) at z=0 with n=x*y
-        # note the -1 in np.reshape tells it to figure out n on its own
-        data_arr = self.ds_var_to_array(var)[:, 0]
+        data_arr = self.ds_var_to_array(var)
+        if len(data_arr.shape) == 4:
+            # remember shape = (t, z, y, x)
+            # we want ts_array.shape = (n, t) at z=0 with n=x*y
+            # note the -1 in np.reshape tells it to figure out n on its own
+            data_arr = self.ds_var_to_array(var)[:, 0]
+
         ts_array = np.ma.masked_array(data_arr, self.mask)
         ts_array = np.reshape(ts_array,
                               newshape=(ts_array.shape[0], -1)).T
@@ -83,6 +86,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
     radiocarbon age time series at each grid point.'''
     def _checkers(self):
         super()._checkers()
+        self.__check_cluster_on()
         self.__check_n_clusters()
         self.__check_max_iter()
         self.__check_n_init()
@@ -110,8 +114,16 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
 
     def _set_ts(self, mask=None):
         # wrapper for setting the time series attribute of this class
-        self.ts = self._make_ts()
+        target_var = self.config['timeseries']['cluster_on']
+        self.ts = self._make_ts(target_var)
 
+    def __check_cluster_on(self):
+        self._check_config_option(
+            'timeseries', 'cluster_on',
+            missing_msg="[!] You have not specified what variable to cluster.",
+            input_msg="[>] Enter which var in the dataset to cluster on: ",
+            confirm_msg='[i] Will form clusters based on: '
+        )
     def __check_n_clusters(self):
         self._check_config_option(
             'timeseries', 'n_clusters',
@@ -227,11 +239,14 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
     def view_results(self, combined_ax_bool=True):
         self.fig = plt.figure()
         # plt.rcParams['figure.constrained_layout.use'] = True
-        self._plot_ts_clusters(combined_ax_bool=combined_ax_bool)
+        self._plot_ts_clusters(combined_ax_bool=combined_ax_bool,
+                               var_to_plot=self.config['timeseries']['cluster_on'],
+                               units='fraction')
         self._map_clusters(combined_ax_bool=combined_ax_bool)
         plt.show()
 
-    def _plot_ts_clusters(self, combined_ax_bool=True):
+    def _plot_ts_clusters(self, combined_ax_bool=True, var_to_plot="R-age",
+                          units='no units'):
         # get predictions for our time series from trained model
         # i.e. to which cluster each time series belongs
         print("[i] Plotting time series by cluster")
@@ -245,7 +260,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
         # for each cluster/label
         if combined_ax_bool:
             combined_ax = self.fig.add_subplot(2, 2, 4)
-            combined_ax.set_title("Combined R-age histories")
+            combined_ax.set_title(f"Combined {var_to_plot} histories")
             combined_ax.set_xlabel("time step")
             combined_ax.yaxis.set_label_position("right")
             combined_ax.yaxis.tick_right()
@@ -256,8 +271,8 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
             ax = self.fig.add_subplot(n_clusters, 2,
                                       2 * n_clusters - 2 * label - 1)
             if label == n_clusters - 1:
-                ax.set_title("Cluster R-age histories")
-                ax.set_ylabel("R-age (yrs)")
+                ax.set_title(f"Cluster {var_to_plot} histories")
+                ax.set_ylabel(f"{var_to_plot} ({units})")
             color = cmap(norm(label))
             # for every time series that has been assigned this label
             cluster_tss = self.ts[labels == label]
@@ -266,9 +281,9 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
                 ax.plot(ts.ravel(), color=color, alpha=.2)
                 if combined_ax_bool:
                     combined_ax.plot(ts.ravel(), color=color, alpha=.1,
-                                     linewidth=0.2)
+                                     linewidth=0.4)
             # plot the cluster barycenter
-            ax.plot(euclidean_barycenter(cluster_tss).ravel(), "k-")
+            ax.plot(euclidean_barycenter(cluster_tss).ravel(), "r-")
             if label > 0:
                 ax.set_xticks([])
             else:
@@ -297,7 +312,7 @@ class TimeSeriesClusteringWorkflow(TimeSeriesWorkflowBase):
 
     def _make_labels_shaped(self):
         # get the timeseries as a dataframe and append labels to non-empty rows
-        df = self._make_df()
+        df = self._make_df(self.config['timeseries']['cluster_on'])
         df.loc[
             df.index.isin(df.dropna().index),
             'labels'] = self.model.labels_
