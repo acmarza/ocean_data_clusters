@@ -56,6 +56,10 @@ class ClusterMatcher:
                                         self.labels_right.values)
             overlap_mask[np.isnan(self.labels_left.values)] = False
             overlap_mask[np.isnan(self.labels_right.values)] = False
+
+            # is NaN on right but not on left
+            left_nan_mask = np.equal(np.isnan(self.labels_right.values),
+                                     ~np.isnan(self.labels_left.values))
         except ValueError:
             print("[!] Can't overlap maps with different sizes! Try regrid.")
 
@@ -72,6 +76,7 @@ class ClusterMatcher:
         self.left_map.imshow(self.labels_left.values,
                              origin='lower', cmap=self.cmap)
         self.left_map.contourf(overlap_mask, 1, hatches=hatches, alpha=0)
+        self.left_map.contour(left_nan_mask, 1, alpha=1, colors='white')
 
         # show right map and hatch based on overlap mask
         self.right_map.imshow(self.labels_right.values,
